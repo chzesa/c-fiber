@@ -12,13 +12,13 @@ struct Fiber;
 		"pushq %%r12 \n\t"	\
 		"pushq %%r13 \n\t"	\
 		"pushq %%r14 \n\t"	\
-		"pushq %%r15 \n\t"	\
+		"pushq %%r15 \n\t"
 
 #define POPA	"popq %%r15 \n\t"	\
 		"popq %%r14 \n\t"	\
 		"popq %%r13 \n\t"	\
 		"popq %%r12 \n\t"	\
-		"popq %%rbx \n\t"	\
+		"popq %%rbx"
 
 
 static const uint64_t STACK_SIZE = 1024 * 128;
@@ -240,7 +240,8 @@ void __attribute__((noinline)) yield(YieldType ty)
 		asm volatile
 		(
 			"movq %0, %%rsp\n\t"
-			"movq %1, %%rbp"
+			"movq %1, %%rbp\n\t"
+			POPA
 			:
 			:"r" (p_stack)
 			,"r" (p_base)
@@ -267,6 +268,7 @@ void __attribute__((noinline)) yield(YieldType ty)
 
 		asm volatile
 		(
+			PUSHA
 			"movq %%rsp, %0\n\t"
 			"movq %%rbp, %1"
 			:"=r" (p_stack)
