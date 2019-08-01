@@ -203,7 +203,10 @@ void execFiber()
 {
 	Fiber* fiber = EXEC_FIBER;
 	fiber->m_task(fiber->m_param);
-	fiber->m_signal->signal();
+	if (fiber->m_signal != nullptr)
+	{
+		fiber->m_signal->signal();
+	}
 	fiber->m_status = FiberStatus::Done;
 	yield(YieldType::Return);
 }
@@ -316,9 +319,14 @@ void __attribute__((noinline)) yield(YieldType ty)
 
 void runTasks(TaskDecl* decl, uint64_t numTasks, Barrier** p_barrier)
 {
-	Barrier* barrier = new Barrier;
-	barrier->m_value = numTasks;
-	(*p_barrier) = barrier;
+	Barrier* barrier = nullptr;
+
+	if (p_barrier != nullptr)
+	{
+		barrier = new Barrier;
+		barrier->m_value = numTasks;
+		(*p_barrier) = barrier;
+	}
 
 	Fiber* fibers[numTasks];
 
