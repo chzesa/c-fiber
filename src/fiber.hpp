@@ -60,8 +60,12 @@ void yield(YieldType);
 
 struct TaskDecl
 {
-	TaskDecl();
-	template<class T>TaskDecl(void (*fn)(T*), T* param);
+	TaskDecl()
+	{
+		m_task = nullptr;
+		m_param = nullptr;
+	}
+	template<class T> TaskDecl(void (*fn)(T*), T* param);
 	void (*m_task)(void*);
 	void* m_param;
 };
@@ -73,7 +77,6 @@ TaskDecl::TaskDecl(void (*fn)(T*), T* param)
 	m_param = param;
 }
 
-TaskDecl::TaskDecl() {}
 
 struct Barrier
 {
