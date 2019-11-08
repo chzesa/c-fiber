@@ -350,6 +350,7 @@ void runTasks(TaskDecl* decl, uint64_t numTasks, Barrier** p_barrier)
 		fiber->m_task = decl[i].m_task;
 		fiber->m_param = decl[i].m_param;
 		fiber->m_signal = barrier;
+		fiber->m_status = FiberStatus::New;
 
 		fibers[i] = fiber;
 	}
