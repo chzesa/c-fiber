@@ -103,7 +103,7 @@ struct Fiber
 	void (*m_task)(void*);
 	void* m_param;
 
-	Barrier* m_signal;
+	Sync* m_signal;
 	FiberStatus m_status;
 };
 
