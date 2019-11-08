@@ -77,8 +77,13 @@ TaskDecl::TaskDecl(void (*fn)(T*), T* param)
 	m_param = param;
 }
 
+struct Sync
+{
+	virtual void signal() = 0;
+	virtual void wait() = 0;
+};
 
-struct Barrier
+struct Barrier : public Sync
 {
 	void signal();
 	void wait();
@@ -140,7 +145,7 @@ void Barrier::wait()
 	yield(YieldType::Block);
 }
 
-struct Semaphore
+struct Semaphore : public Sync
 {
 	void signal();
 	void wait();
