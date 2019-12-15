@@ -46,6 +46,7 @@ void yield() { yield(YieldType::Acquire); }
 
 struct Fiber
 {
+	Fiber* next;
 	char m_stack[STACK_SIZE];
 
 	uint64_t m_fiberStack;
@@ -56,7 +57,6 @@ struct Fiber
 
 	Sync* m_signal;
 	FiberStatus m_status;
-	Fiber* next;
 };
 
 
