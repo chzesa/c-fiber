@@ -6,11 +6,11 @@
 
 #include "src/fiber.hpp"
 using namespace std;
-using namespace fiber;
 
 struct ComputeTask;
 static deque<ComputeTask> computeQueue;
 static std::atomic_flag computeQueueLock = ATOMIC_FLAG_INIT;
+using namespace czsfiber;
 
 struct ComputeTask
 {
@@ -64,14 +64,14 @@ int main()
 {
 	thread t1 ([] {
 		while(true) {
-			yield(YieldType::Acquire);
+			yield();
 			this_thread::sleep_for(chrono::milliseconds(1));
 		}
 	});
 
 	thread t2 ([] {
 		while(true) {
-			yield(YieldType::Acquire);
+			yield();
 			this_thread::sleep_for(chrono::milliseconds(1));
 		}
 	});
