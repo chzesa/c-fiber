@@ -6,99 +6,106 @@
 
 #include "src/fiber.hpp"
 using namespace std;
-
-struct ComputeTask;
-static deque<ComputeTask> computeQueue;
-static std::atomic_flag computeQueueLock = ATOMIC_FLAG_INIT;
 using namespace czsfiber;
 
+// Input data for performing computations
 struct ComputeTask
 {
-	Semaphore* m_semaphore;
-	uint64_t* m_input;
-	uint64_t* m_output;
+	Semaphore* semaphore;
+	uint64_t* input;
+	uint64_t* output;
 };
+
+static deque<ComputeTask> COMPUTE_QUEUE;
+static std::atomic_flag COMPUTE_QUEUE_LOCK = ATOMIC_FLAG_INIT;
+static bool EXITING = false;
+
+// Demonstrating use of semaphore
+void waitForComputation(uint64_t* input)
+{
+	// Create semaphore to signal once computation is done
+	Semaphore sem;
+
+	uint64_t result;
+
+	ComputeTask task = {};
+	task.input = input;
+	task.output = &result;
+	task.semaphore = &sem;
+
+	// Add computation info to global computation queue
+	while (COMPUTE_QUEUE_LOCK.test_and_set(std::memory_order_relaxed));
+	COMPUTE_QUEUE.push_back(task);
+	COMPUTE_QUEUE_LOCK.clear();
+
+	// Halt fiber execution until semaphore is signaled
+	sem.wait();
+	cout << "Expensive computation finished: " << *input << " -> " << result << endl;
+}
 
 void expensiveComputation()
 {
-	while (computeQueueLock.test_and_set(std::memory_order_relaxed));
+	// Acquire next task from computation queue, if any
+	while (COMPUTE_QUEUE_LOCK.test_and_set(std::memory_order_relaxed));
 
 	ComputeTask task;
 
-	if (computeQueue.size() == 0) {
-		computeQueueLock.clear();
+	if (COMPUTE_QUEUE.size() == 0) {
+		COMPUTE_QUEUE_LOCK.clear();
 		return;
 	} else {
-		task = computeQueue.front();
-		computeQueue.pop_front();
+		task = COMPUTE_QUEUE.front();
+		COMPUTE_QUEUE.pop_front();
 	}
 
-	computeQueueLock.clear();
+	COMPUTE_QUEUE_LOCK.clear();
 
+	// Pretend the computation takes a while
 	this_thread::sleep_for(1s);
-	*task.m_output = *task.m_input + 1;
+	*task.output = *task.input + 1;
 
-	task.m_semaphore->signal();
+	// Signal the semaphore
+	task.semaphore->signal();
 }
 
-void waitForExpensiveComputation(uint64_t* input)
+// Demonstrating use of barrier
+void waitForAllComputations()
 {
-	uint64_t output;
-	Semaphore sem;
+	TaskDecl decls[5];
+	uint64_t inputData[] = {3, 6, 9, 12, 15};
 
-	ComputeTask task = {};
-	task.m_input = input;
-	task.m_output = &output;
-	task.m_semaphore = &sem;
+	// Create fiber declarations
+	for (int i = 0; i < 5; i++)
+	{
+		decls[i] = TaskDecl(waitForComputation, &inputData[i]);
+	}
 
-	while (computeQueueLock.test_and_set(std::memory_order_relaxed));
-	computeQueue.push_back(task);
-	computeQueueLock.clear();
+	Barrier* barrier;
+	// runTasks allocates a barrier in heap if pointer to Barrier* is passed
+	runTasks(decls, 5, &barrier);
+	barrier->wait();
+	// cleanup
+	delete barrier;
 
-	sem.wait();
-
-	cout << "Expensive computation finished: " << *input << " -> " << output << "\n\0";
+	cout << "All computations have finished." << endl;
+	EXITING = true;
 }
 
 int main()
 {
-	thread t1 ([] {
-		while(true) {
-			yield();
-			this_thread::sleep_for(chrono::milliseconds(1));
-		}
-	});
+	// Spawn some worker threads for concurrency
+	thread t1 ([] { while(!EXITING) { yield(); } });
+	thread t2 ([] { while(!EXITING) { yield(); } });
+	thread t3 ([] { while(!EXITING) { expensiveComputation(); } });
 
-	thread t2 ([] {
-		while(true) {
-			yield();
-			this_thread::sleep_for(chrono::milliseconds(1));
-		}
-	});
+	// Create fiber for demonstrating usage of barrier
+	TaskDecl decl(waitForAllComputations);
+	runTasks(&decl, 1, nullptr);
 
-	thread t3([] {
-		while(true)
-		{
-			expensiveComputation();
-			this_thread::sleep_for(chrono::milliseconds(1));
-		}
-	});
+	// Try to execute fibers
+	while(!EXITING) { yield(); }
 
-	TaskDecl decls[5];
-	uint64_t inputData[] = {3, 6, 9, 12, 15};
-
-	for (int i = 0; i < 5; i++)
-	{
-		decls[i] = TaskDecl(waitForExpensiveComputation, &inputData[i]);
-	}
-
-	Barrier* barrier;
-	runTasks(decls, 5, &barrier);
-
-	while (barrier->m_value > 0)
-	{
-		this_thread::sleep_for(1s);
-	}
-	
-	delete barrier;
+	t1.join();
+	t2.join();
+	t3.join();
 }
