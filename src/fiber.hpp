@@ -23,6 +23,18 @@ struct TaskDecl
 	void* m_param;
 };
 
+enum QueueItemType: uint16_t
+{
+	QUEUE_FIBER,
+	QUEUE_TASK
+};
+
+struct Dummy
+{
+	Dummy* next;
+	QueueItemType kind;
+};
+
 struct Sync
 {
 	virtual void signal() = 0;
@@ -36,8 +48,8 @@ struct Barrier : public Sync
 
 	std::atomic_flag m_lock;
 	uint64_t m_value;
-	Fiber* m_head = nullptr;
-	Fiber* m_tail = nullptr;
+	Dummy* m_head = nullptr;
+	Dummy* m_tail = nullptr;
 };
 
 struct Semaphore : public Sync
@@ -47,8 +59,8 @@ struct Semaphore : public Sync
 
 	std::atomic_flag m_lock;
 	int64_t m_value = 0;
-	Fiber* m_head = nullptr;
-	Fiber* m_tail = nullptr;
+	Dummy* m_head = nullptr;
+	Dummy* m_tail = nullptr;
 };
 
 void yield();

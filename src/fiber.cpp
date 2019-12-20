@@ -18,8 +18,8 @@ namespace czsfiber
 static const uint64_t STACK_SIZE = 1024 * 128;
 
 static std::atomic_flag QUEUE_LOCK = ATOMIC_FLAG_INIT;
-static Fiber* HEAD = nullptr;
-static Fiber* TAIL = nullptr;
+static Dummy* HEAD = nullptr;
+static Dummy* TAIL = nullptr;
 
 static thread_local Fiber* OLD_FIBERS = nullptr;
 
@@ -43,11 +43,29 @@ enum YieldType
 	Return
 };
 
+struct QueueTask : Dummy
+{
+	QueueTask(TaskDecl task, Sync* sync)
+	{
+		kind = QUEUE_TASK;
+		this->task = task;
+		this->sync = sync;
+	}
+
+	TaskDecl task;
+	Sync* sync;
+};
+
 void yield(YieldType ty);
 void yield() { yield(YieldType::Acquire); }
 
-struct Fiber
+struct Fiber : Dummy
 {
+	Fiber()
+	{
+		kind = QUEUE_FIBER;
+	}
+
 	void set(void (*task)(void*), void* param, Sync* signal)
 	{
 		m_fiberStack = (uint64_t) &(m_fiberStack);
@@ -69,9 +87,7 @@ struct Fiber
 
 	Sync* m_signal;
 	FiberStatus m_status;
-	Fiber* next;
 };
-
 
 void acquireLock()
 {
@@ -89,7 +105,7 @@ TaskDecl::TaskDecl()
 	m_param = nullptr;
 }
 
-void append(Fiber* head, Fiber* tail)
+void append(Dummy* head, Dummy* tail)
 {
 	tail->next = nullptr;
 	acquireLock();
@@ -100,7 +116,7 @@ void append(Fiber* head, Fiber* tail)
 	}
 	else
 	{
-		TAIL->next = head;
+		TAIL = head;
 		TAIL = tail;
 	}
 	releaseLock();
@@ -111,8 +127,8 @@ void Barrier::signal()
 	while(m_lock.test_and_set(std::memory_order_relaxed));
 	if (m_value > 0 && --m_value == 0)
 	{
-		Fiber* head = m_head;
-		Fiber* tail = m_tail;
+		Dummy* head = m_head;
+		Dummy* tail = m_tail;
 		m_head = nullptr;
 		m_tail = nullptr;
 		m_lock.clear();
@@ -162,8 +178,8 @@ void Semaphore::signal()
 
 	if (m_head != nullptr)
 	{
-		Fiber* head = m_head;
-		Fiber* tail = m_tail;
+		Dummy* head = m_head;
+		Dummy* tail = m_tail;
 
 		if (m_head == m_tail)
 		{
@@ -213,8 +229,8 @@ void Semaphore::wait()
 Fiber* acquireNext()
 {
 	acquireLock();
-	Fiber* fiber = HEAD;
-	if (fiber != nullptr)
+	Dummy* dummy = HEAD;
+	if (dummy != nullptr)
 	{
 		if (HEAD == TAIL)
 		{
@@ -223,10 +239,35 @@ Fiber* acquireNext()
 		}
 		else
 		{
-			HEAD = fiber->next;
+			HEAD = dummy->next;
 		}
 	}
 	releaseLock();
+
+	if (dummy == nullptr)
+	{
+		return nullptr;
+	}
+
+	if (dummy->kind == QUEUE_FIBER)
+	{
+		return reinterpret_cast<Fiber*>(dummy);
+	}
+
+	QueueTask* qt = reinterpret_cast<QueueTask*>(dummy);
+
+	Fiber* fiber;
+	if (OLD_FIBERS != nullptr)
+	{
+		fiber = OLD_FIBERS;
+		OLD_FIBERS = reinterpret_cast<Fiber*>(fiber->next);
+	} else {
+		fiber = new Fiber();
+	}
+
+	fiber->set(qt->task.m_task, qt->task.m_param, qt->sync);
+	delete qt;
+
 	return fiber;
 }
 
@@ -362,29 +403,18 @@ void runTasks(TaskDecl* decl, uint64_t numTasks, Barrier** p_barrier)
 		(*p_barrier) = barrier;
 	}
 
-	Fiber* fibers[numTasks];
-
-	for (uint64_t i = 0; i < numTasks; i++)
+	if (numTasks == 0)
 	{
-		Fiber* fiber;
-		if (OLD_FIBERS != nullptr)
-		{
-			fiber = OLD_FIBERS;
-			OLD_FIBERS = fiber->next;
-		} else {
-			fiber = new Fiber;
-		}
-
-		fiber->set(decl[i].m_task, decl[i].m_param, barrier);
-
-		fibers[i] = fiber;
-		if (i > 0)
-		{
-			fibers[i - 1]->next = fiber;
-		}
+		return;
 	}
 
-	append(fibers[0], fibers[numTasks - 1]);
+	Dummy* dummys[numTasks];
+	for (uint64_t i = 0; i < numTasks; i++)
+	{
+		dummys[i] = new QueueTask(decl[i], barrier);
+	}
+
+	append(dummys[0], dummys[numTasks - 1]);
 }
 
 }
