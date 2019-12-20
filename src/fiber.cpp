@@ -21,6 +21,8 @@ static std::atomic_flag QUEUE_LOCK = ATOMIC_FLAG_INIT;
 static Fiber* HEAD = nullptr;
 static Fiber* TAIL = nullptr;
 
+static thread_local Fiber* OLD_FIBERS = nullptr;
+
 static thread_local std::atomic_flag* HELD_LOCK = nullptr;
 static thread_local Fiber* EXEC_FIBER = nullptr;
 static thread_local uint64_t P_BASE = 0;
@@ -46,6 +48,17 @@ void yield() { yield(YieldType::Acquire); }
 
 struct Fiber
 {
+	void set(void (*task)(void*), void* param, Sync* signal)
+	{
+		m_fiberStack = (uint64_t) &(m_fiberStack);
+		m_fiberBase = m_fiberStack;
+
+		m_task = task;
+		m_param = param;
+		m_signal = signal;
+		m_status = FiberStatus::New;
+	}
+
 	char m_stack[STACK_SIZE];
 
 	uint64_t m_fiberStack;
@@ -268,7 +281,8 @@ void __attribute__((noinline)) yield(YieldType ty)
 		switch(EXEC_FIBER->m_status)
 		{
 		case FiberStatus::Done:
-			delete EXEC_FIBER;
+			EXEC_FIBER->next = OLD_FIBERS;
+			OLD_FIBERS = EXEC_FIBER;
 			break;
 		case FiberStatus::Blocked:
 			HELD_LOCK = nullptr;
@@ -352,15 +366,16 @@ void runTasks(TaskDecl* decl, uint64_t numTasks, Barrier** p_barrier)
 
 	for (uint64_t i = 0; i < numTasks; i++)
 	{
-		Fiber* fiber = new Fiber;
+		Fiber* fiber;
+		if (OLD_FIBERS != nullptr)
+		{
+			fiber = OLD_FIBERS;
+			OLD_FIBERS = fiber->next;
+		} else {
+			fiber = new Fiber;
+		}
 
-		fiber->m_fiberStack = (uint64_t) &(fiber->m_fiberStack);
-		fiber->m_fiberBase = fiber->m_fiberStack;
-
-		fiber->m_task = decl[i].m_task;
-		fiber->m_param = decl[i].m_param;
-		fiber->m_signal = barrier;
-		fiber->m_status = FiberStatus::New;
+		fiber->set(decl[i].m_task, decl[i].m_param, barrier);
 
 		fibers[i] = fiber;
 		if (i > 0)
