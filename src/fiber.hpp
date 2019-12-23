@@ -46,7 +46,7 @@ struct Barrier : public Sync
 	void signal();
 	void wait();
 
-	std::atomic_flag m_lock;
+	std::atomic_flag m_lock = ATOMIC_FLAG_INIT;
 	uint64_t m_value;
 	Dummy* m_head = nullptr;
 	Dummy* m_tail = nullptr;
@@ -57,7 +57,7 @@ struct Semaphore : public Sync
 	void signal();
 	void wait();
 
-	std::atomic_flag m_lock;
+	std::atomic_flag m_lock = ATOMIC_FLAG_INIT;
 	int64_t m_value = 0;
 	Dummy* m_head = nullptr;
 	Dummy* m_tail = nullptr;
