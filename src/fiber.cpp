@@ -412,7 +412,12 @@ void runTasks(TaskDecl* decl, uint64_t numTasks, Barrier** p_barrier)
 	Dummy* dummys[numTasks];
 	for (uint64_t i = 0; i < numTasks; i++)
 	{
-		dummys[i] = new QueueTask(decl[i], barrier);
+		Dummy* d = new QueueTask(decl[i], barrier);
+		dummys[i] = d;
+		if (i > 0)
+		{
+			dummys[i - 1]->next = d;
+		}
 	}
 
 	append(dummys[0], dummys[numTasks - 1]);
