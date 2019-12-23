@@ -147,6 +147,7 @@ void Barrier::signal()
 void Barrier::wait()
 {
 	Fiber* fiber = EXEC_FIBER;
+	fiber->next = nullptr;
 	while(m_lock.test_and_set(std::memory_order_relaxed));
 
 	if (m_value == 0)
@@ -201,7 +202,6 @@ void Semaphore::signal()
 void Semaphore::wait()
 {
 	while(m_lock.test_and_set(std::memory_order_relaxed));
-
 	if (m_value > 0)
 	{
 		m_value--;
@@ -210,6 +210,7 @@ void Semaphore::wait()
 	}
 
 	Fiber* fiber = EXEC_FIBER;
+	fiber->next = nullptr;
 	fiber->m_status = FiberStatus::Blocked;
 
 	if (m_tail == nullptr)
