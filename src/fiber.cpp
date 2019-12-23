@@ -116,7 +116,7 @@ void append(Dummy* head, Dummy* tail)
 	}
 	else
 	{
-		TAIL = head;
+		TAIL->next = head;
 		TAIL = tail;
 	}
 	releaseLock();
