@@ -180,8 +180,6 @@ void Semaphore::signal()
 	if (m_head != nullptr)
 	{
 		Dummy* head = m_head;
-		Dummy* tail = m_tail;
-
 		if (m_head == m_tail)
 		{
 			m_head = nullptr;
@@ -192,7 +190,7 @@ void Semaphore::signal()
 			m_head = head->next;
 		}
 		m_lock.clear();
-		append(head, tail);
+		append(head, head);
 	} else {
 		m_value++;
 		m_lock.clear();
