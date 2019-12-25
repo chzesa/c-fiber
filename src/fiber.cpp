@@ -219,6 +219,7 @@ void Semaphore::wait()
 	else
 	{
 		m_tail->next = fiber;
+		m_tail = fiber;
 	}
 
 	HELD_LOCK = &m_lock;
