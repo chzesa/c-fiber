@@ -109,7 +109,7 @@ void append(Dummy* head, Dummy* tail)
 {
 	tail->next = nullptr;
 	acquireLock();
-	if (TAIL == nullptr)
+	if (HEAD == nullptr)
 	{
 		HEAD = head;
 		TAIL = tail;
@@ -133,12 +133,11 @@ void Barrier::signal()
 		m_tail = nullptr;
 		m_lock.clear();
 
-		if (head == nullptr)
+		if (head != nullptr)
 		{
-			return;
+			append(head, tail);
 		}
 
-		append(head, tail);
 	} else {
 		m_lock.clear();
 	}
@@ -158,7 +157,7 @@ void Barrier::wait()
 
 	fiber->m_status = FiberStatus::Blocked;
 
-	if (m_tail == nullptr)
+	if (m_head == nullptr)
 	{
 		m_head = fiber;
 		m_tail = fiber;
@@ -211,7 +210,7 @@ void Semaphore::wait()
 	fiber->next = nullptr;
 	fiber->m_status = FiberStatus::Blocked;
 
-	if (m_tail == nullptr)
+	if (m_head == nullptr)
 	{
 		m_head = fiber;
 		m_tail = fiber;
@@ -235,7 +234,6 @@ Fiber* acquireNext()
 		if (HEAD == TAIL)
 		{
 			HEAD = nullptr;
-			TAIL = nullptr;
 		}
 		else
 		{
