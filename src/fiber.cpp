@@ -28,6 +28,52 @@ static thread_local Fiber* EXEC_FIBER = nullptr;
 static thread_local uint64_t P_BASE = 0;
 static thread_local uint64_t P_STACK = 0;
 
+Dummy* ll_pop_front(Dummy** ll_head, Dummy** ll_tail)
+{
+	Dummy* ret = *ll_head;
+	if (ret != nullptr)
+	{
+		*ll_head = ret->next;
+	}
+
+	return ret;
+}
+
+void ll_push_back(Dummy** ll_head, Dummy** ll_tail, Dummy* head, Dummy* tail)
+{
+	tail->next = nullptr;
+	if (*ll_head == nullptr)
+	{
+		*ll_head = head;
+		*ll_tail = tail;
+	}
+	else
+	{
+		(*ll_tail)->next = head;
+		*ll_tail = tail;
+	}
+}
+
+void ll_push_front(Dummy** ll_head, Dummy** ll_tail, Dummy* head, Dummy* tail)
+{
+	if (*ll_head == nullptr)
+	{
+		*ll_tail = tail;
+	}
+	tail->next = *ll_head;
+	*ll_head = head;
+}
+
+void acquire(std::atomic_flag* lock)
+{
+	while(lock->test_and_set(std::memory_order_acquire)) { }
+}
+
+void release(std::atomic_flag* lock)
+{
+	lock->clear(std::memory_order_release);
+}
+
 enum FiberStatus
 {
 	New,
@@ -89,57 +135,31 @@ struct Fiber : Dummy
 	FiberStatus m_status;
 };
 
-void acquireLock()
-{
-	while(QUEUE_LOCK.test_and_set(std::memory_order_relaxed));
-}
-
-void releaseLock()
-{
-	QUEUE_LOCK.clear();
-}
-
 TaskDecl::TaskDecl()
 {
 	m_task = nullptr;
 	m_param = nullptr;
 }
 
-void append(Dummy* head, Dummy* tail)
-{
-	tail->next = nullptr;
-	acquireLock();
-	if (HEAD == nullptr)
-	{
-		HEAD = head;
-		TAIL = tail;
-	}
-	else
-	{
-		TAIL->next = head;
-		TAIL = tail;
-	}
-	releaseLock();
-}
-
 void Barrier::signal()
 {
-	while(m_lock.test_and_set(std::memory_order_relaxed));
+	acquire(&m_lock);
 	if (m_value > 0 && --m_value == 0)
 	{
 		Dummy* head = m_head;
 		Dummy* tail = m_tail;
 		m_head = nullptr;
-		m_tail = nullptr;
-		m_lock.clear();
+		release(&m_lock);
 
 		if (head != nullptr)
 		{
-			append(head, tail);
+			acquire(&QUEUE_LOCK);
+			ll_push_front(&HEAD, &TAIL, head, tail);
+			release(&QUEUE_LOCK);
 		}
 
 	} else {
-		m_lock.clear();
+		release(&m_lock);
 	}
 }
 
@@ -147,26 +167,16 @@ void Barrier::wait()
 {
 	Fiber* fiber = EXEC_FIBER;
 	fiber->next = nullptr;
-	while(m_lock.test_and_set(std::memory_order_relaxed));
+	acquire(&m_lock);
 
 	if (m_value == 0)
 	{
-		m_lock.clear();
+		release(&m_lock);
 		return;
 	}
 
 	fiber->m_status = FiberStatus::Blocked;
-
-	if (m_head == nullptr)
-	{
-		m_head = fiber;
-		m_tail = fiber;
-	}
-	else
-	{
-		m_tail->next = fiber;
-		m_tail = fiber;
-	}
+	ll_push_back(&m_head, &m_tail, fiber, fiber);
 
 	HELD_LOCK = &m_lock;
 	yield(YieldType::Block);
@@ -174,73 +184,45 @@ void Barrier::wait()
 
 void Semaphore::signal()
 {
-	while(m_lock.test_and_set(std::memory_order_relaxed));
+	acquire(&m_lock);
+	Dummy* f = ll_pop_front(&m_head, &m_tail);
 
-	if (m_head != nullptr)
+	if (f != nullptr)
 	{
-		Dummy* head = m_head;
-		if (m_head == m_tail)
-		{
-			m_head = nullptr;
-			m_tail = nullptr;
-		}
-		else
-		{
-			m_head = head->next;
-		}
-		m_lock.clear();
-		append(head, head);
+		release(&m_lock);
+
+		acquire(&QUEUE_LOCK);
+		ll_push_front(&HEAD, &TAIL, f, f);
+		release(&QUEUE_LOCK);
 	} else {
 		m_value++;
-		m_lock.clear();
+		release(&m_lock);
 	}
 }
 
 void Semaphore::wait()
 {
-	while(m_lock.test_and_set(std::memory_order_relaxed));
+	acquire(&m_lock);
 	if (m_value > 0)
 	{
 		m_value--;
-		m_lock.clear();
+		release(&m_lock);
 		return;
 	}
 
 	Fiber* fiber = EXEC_FIBER;
-	fiber->next = nullptr;
 	fiber->m_status = FiberStatus::Blocked;
 
-	if (m_head == nullptr)
-	{
-		m_head = fiber;
-		m_tail = fiber;
-	}
-	else
-	{
-		m_tail->next = fiber;
-		m_tail = fiber;
-	}
-
+	ll_push_back(&m_head, &m_tail, fiber, fiber);
 	HELD_LOCK = &m_lock;
 	yield(YieldType::Block);
 }
 
 Fiber* acquireNext()
 {
-	acquireLock();
-	Dummy* dummy = HEAD;
-	if (dummy != nullptr)
-	{
-		if (HEAD == TAIL)
-		{
-			HEAD = nullptr;
-		}
-		else
-		{
-			HEAD = dummy->next;
-		}
-	}
-	releaseLock();
+	acquire(&QUEUE_LOCK);
+	Dummy* dummy = ll_pop_front(&HEAD, &TAIL);
+	release(&QUEUE_LOCK);
 
 	if (dummy == nullptr)
 	{
@@ -302,7 +284,7 @@ void __attribute__((noinline)) yield(YieldType ty)
 
 		fiber->m_fiberStack = p_stack;
 		fiber->m_fiberBase = p_base;
-		HELD_LOCK->clear();
+		release(HELD_LOCK);
 
 	case YieldType::Return:
 		p_stack = P_STACK;
@@ -320,8 +302,9 @@ void __attribute__((noinline)) yield(YieldType ty)
 		switch(EXEC_FIBER->m_status)
 		{
 		case FiberStatus::Done:
-			EXEC_FIBER->next = OLD_FIBERS;
-			OLD_FIBERS = EXEC_FIBER;
+			fiber = EXEC_FIBER;
+			fiber->next = OLD_FIBERS;
+			OLD_FIBERS = fiber;
 			break;
 		case FiberStatus::Blocked:
 			HELD_LOCK = nullptr;
@@ -417,7 +400,9 @@ void runTasks(TaskDecl* decl, uint64_t numTasks, Barrier** p_barrier)
 		}
 	}
 
-	append(dummys[0], dummys[numTasks - 1]);
+	acquire(&QUEUE_LOCK);
+	ll_push_back(&HEAD, &TAIL, dummys[0], dummys[numTasks - 1]);
+	release(&QUEUE_LOCK);
 }
 
 }
