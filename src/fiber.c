@@ -23,8 +23,6 @@
 	#define CZSF_NOINLINE __attribute__((noinline))
 #endif
 
-#define CZSF_STACK_SIZE 1024 * 128
-
 enum czsf_item_kind
 {
 	CZSF_FIBER,

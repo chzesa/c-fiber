@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 
+#ifndef CZSF_STACK_SIZE
+#define CZSF_STACK_SIZE 1024 * 128
+#endif
+
 enum czsf_sync_kind
 {
 	CZSF_SYNC_SEMAPHORE,
