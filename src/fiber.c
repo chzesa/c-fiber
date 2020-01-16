@@ -25,6 +25,18 @@
 
 #define CZSF_STACK_SIZE 1024 * 128
 
+enum czsf_item_kind
+{
+	CZSF_FIBER,
+	CZSF_TASK_DESC
+};
+
+enum czsf_yield_kind
+{
+	CZSF_YIELD_ACQUIRE,
+	CZSF_YIELD_BLOCK,
+	CZSF_YIELD_RETURN
+};
 
 enum czsf_fiber_status
 {
@@ -54,6 +66,12 @@ void czsf_spinlock_release(struct czsf_spinlock_t* self)
 }
 
 // ########
+
+struct czsf_item_header_t
+{
+	struct czsf_item_header_t* next;
+	enum czsf_item_kind kind;
+};
 
 struct czsf_item_header_t* czsf_list_pop_front(struct czsf_list_t* self)
 {
@@ -208,6 +226,8 @@ struct czsf_fiber_t* czsf_acquire_next_fiber()
 	return fiber;
 }
 
+void __czsf_yield(enum czsf_yield_kind kind);
+
 void czsf_exec_fiber()
 {
 	struct czsf_fiber_t* fiber = CZSF_EXEC_FIBER;
@@ -219,10 +239,10 @@ void czsf_exec_fiber()
 	}
 
 	fiber->status = CZSF_FIBER_STATUS_DONE;
-	czsf_yield(CZSF_YIELD_RETURN);
+	__czsf_yield(CZSF_YIELD_RETURN);
 }
 
-CZSF_NOINLINE void czsf_yield(enum czsf_yield_kind kind)
+CZSF_NOINLINE void __czsf_yield(enum czsf_yield_kind kind)
 {
 	struct czsf_fiber_t* fiber = CZSF_EXEC_FIBER;
 	uint64_t stack;
@@ -327,6 +347,11 @@ CZSF_NOINLINE void czsf_yield(enum czsf_yield_kind kind)
 	}
 }
 
+void czsf_yield()
+{
+	__czsf_yield(CZSF_YIELD_ACQUIRE);
+}
+
 // ########
 
 struct czsf_sync_t czsf_init_semaphore(int64_t value)
@@ -419,7 +444,7 @@ void czsf_wait(struct czsf_sync_t* self)
 	fiber->status = CZSF_FIBER_STATUS_BLOCKED;
 	czsf_list_push_back(&self->queue, &fiber->header, &fiber->header);
 	CZSF_HELD_LOCK = &self->lock;
-	czsf_yield(CZSF_YIELD_BLOCK);
+	__czsf_yield(CZSF_YIELD_BLOCK);
 }
 
 void czsf_run(struct czsf_task_decl_t* decls, uint64_t count)
