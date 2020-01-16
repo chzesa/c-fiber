@@ -137,6 +137,31 @@ void czsf_list_push_front(struct czsf_list_t* self, struct czsf_item_header_t* h
 	self->head = head;
 }
 
+struct czsf_stack_t
+{
+	struct czsf_item_header_t* head;
+};
+
+#define CZSF_STACK_INIT {NULL}
+
+void czsf_stack_push(struct czsf_stack_t* self, struct czsf_item_header_t* item)
+{
+	item->next = self->head;
+	self->head = item;
+}
+
+struct czsf_item_header_t* czsf_stack_pop(struct czsf_stack_t* self)
+{
+	struct czsf_item_header_t* ret = self->head;
+
+	if (ret != NULL)
+	{
+		self->head = ret->next;
+	}
+
+	return ret;
+}
+
 // ########
 
 struct czsf_sync_t
@@ -197,8 +222,9 @@ struct czsf_task_decl_t czsf_task_decl2(void (*fn)())
 
 // ########
 
-static struct czsf_list_t CZSF_GLOBAL_QUEUE = {NULL, NULL};
-static struct czsf_spinlock_t CZSF_GLOBAL_LOCK = {0};
+static struct czsf_list_t CZSF_GLOBAL_QUEUE = CZSF_LIST_INIT;
+static struct czsf_spinlock_t CZSF_GLOBAL_LOCK = CZSF_SPINLOCK_INIT;
+static CZSF_THREAD_LOCAL struct czsf_stack_t CZSF_STORED_FIBERS = CZSF_STACK_INIT;
 
 static CZSF_THREAD_LOCAL struct czsf_fiber_t* CZSF_EXEC_FIBER = NULL;
 static CZSF_THREAD_LOCAL struct czsf_spinlock_t* CZSF_HELD_LOCK = NULL;
@@ -206,6 +232,7 @@ static CZSF_THREAD_LOCAL struct czsf_spinlock_t* CZSF_HELD_LOCK = NULL;
 static CZSF_THREAD_LOCAL uint64_t CZSF_STACK = 0;
 static CZSF_THREAD_LOCAL uint64_t CZSF_BASE = 0;
 // ########
+
 void czsf_yield(enum czsf_yield_kind kind);
 void czsf_signal(struct czsf_sync_t* self);
 
@@ -226,8 +253,13 @@ struct czsf_fiber_t* czsf_acquire_next_fiber()
 	}
 
 	struct czsf_queue_item_t* qi = (struct czsf_queue_item_t*)(d);
+	struct czsf_fiber_t* fiber = (struct czsf_fiber_t*)(czsf_stack_pop(&CZSF_STORED_FIBERS));
 
-	struct czsf_fiber_t* fiber = (struct czsf_fiber_t*)(malloc(sizeof(struct czsf_fiber_t)));
+	if (fiber == NULL)
+	{
+		fiber = (struct czsf_fiber_t*)(malloc(sizeof(struct czsf_fiber_t)));
+	}
+
 	*fiber = CZSF_FIBER_INIT;
 	czsf_reset_fiber(fiber, qi->task.fn, qi->task.param, qi->sync);
 	free(qi);
@@ -285,7 +317,7 @@ CZSF_NOINLINE void czsf_yield(enum czsf_yield_kind kind)
 		switch(fiber->status)
 		{
 		case CZSF_FIBER_STATUS_DONE:
-			free(fiber);
+			czsf_stack_push(&CZSF_STORED_FIBERS, &fiber->header);
 			break;
 		case CZSF_FIBER_STATUS_BLOCKED:
 			CZSF_HELD_LOCK = NULL;
