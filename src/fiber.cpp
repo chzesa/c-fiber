@@ -141,6 +141,16 @@ TaskDecl::TaskDecl()
 	m_param = nullptr;
 }
 
+Barrier::Barrier()
+{
+	m_value = 0;
+}
+
+Barrier::Barrier(uint64_t value)
+{
+	m_value = value;
+}
+
 void Barrier::signal()
 {
 	acquire(&m_lock);
@@ -180,6 +190,16 @@ void Barrier::wait()
 
 	HELD_LOCK = &m_lock;
 	yield(YieldType::Block);
+}
+
+Semaphore::Semaphore()
+{
+	m_value = 0;
+}
+
+Semaphore::Semaphore(int64_t value)
+{
+	m_value = value;
 }
 
 void Semaphore::signal()

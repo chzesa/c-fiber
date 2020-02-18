@@ -43,6 +43,8 @@ struct Sync
 
 struct Barrier : public Sync
 {
+	Barrier();
+	Barrier(uint64_t value);
 	void signal();
 	void wait();
 
@@ -54,11 +56,13 @@ struct Barrier : public Sync
 
 struct Semaphore : public Sync
 {
+	Semaphore();
+	Semaphore(int64_t value);
 	void signal();
 	void wait();
 
 	std::atomic_flag m_lock = ATOMIC_FLAG_INIT;
-	int64_t m_value = 0;
+	int64_t m_value;
 	Dummy* m_head = nullptr;
 	Dummy* m_tail = nullptr;
 };
