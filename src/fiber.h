@@ -45,8 +45,8 @@ struct czsf_task_decl_t czsf_task_decl2(void (*fn)());
 void czsf_yield();
 void czsf_signal(struct czsf_sync_t* self);
 
-struct czsf_sync_t czsf_init_semaphore(int64_t value);
-struct czsf_sync_t czsf_init_barrier(int64_t count);
+struct czsf_sync_t czsf_semaphore(int64_t value);
+struct czsf_sync_t czsf_barrier(int64_t count);
 
 void czsf_signal(struct czsf_sync_t* self);
 void czsf_wait(struct czsf_sync_t* self);

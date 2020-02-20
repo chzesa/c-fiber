@@ -352,13 +352,13 @@ void czsf_yield()
 
 // ########
 
-struct czsf_sync_t czsf_init_semaphore(int64_t value)
+struct czsf_sync_t czsf_semaphore(int64_t value)
 {
 	struct czsf_sync_t s = {CZSF_SYNC_SEMAPHORE, value, CZSF_SPINLOCK_INIT, CZSF_LIST_INIT }; 
 	return s;
 }
 
-struct czsf_sync_t czsf_init_barrier(int64_t count)
+struct czsf_sync_t czsf_barrier(int64_t count)
 {
 	struct czsf_sync_t b = {CZSF_SYNC_BARRIER, count, CZSF_SPINLOCK_INIT, CZSF_LIST_INIT }; 
 	return b;
