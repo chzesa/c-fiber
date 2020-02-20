@@ -51,5 +51,8 @@ struct czsf_sync_t czsf_barrier(int64_t count);
 void czsf_signal(struct czsf_sync_t* self);
 void czsf_wait(struct czsf_sync_t* self);
 void czsf_run(struct czsf_task_decl_t* decls, uint64_t count);
+void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync);
+void czsf_run_mono(void (*fn)(void*), void* param, uint64_t count);
+void czsf_run_mono_signal(void (*fn)(void*), void* param, uint64_t count, struct czsf_sync_t* sync);
 
 #endif

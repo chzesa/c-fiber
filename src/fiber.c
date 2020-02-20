@@ -471,3 +471,30 @@ void czsf_run(struct czsf_task_decl_t* decls, uint64_t count)
 	czsf_list_push_back(&CZSF_GLOBAL_QUEUE, &items[0]->header, &items[count - 1]->header);
 	czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
 }
+void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync)
+{
+	if (count == 0)
+	{
+		return;
+	}
+
+	struct czsf_queue_item_t* items[count];
+
+	for (int i = 0; i < count; i++)
+	{
+		struct czsf_queue_item_t* item = (struct czsf_queue_item_t*)malloc(sizeof(czsf_queue_item_t));
+		*item = CZSF_QUEUE_ITEM_INIT;
+		item->task = decls[i];
+		item->sync = sync;
+		items[i] = item;
+
+		if (i > 0)
+		{
+			items[i - 1]->header.next = &item->header;
+		}
+	}
+
+	czsf_spinlock_acquire(&CZSF_GLOBAL_LOCK);
+	czsf_list_push_back(&CZSF_GLOBAL_QUEUE, &items[0]->header, &items[count - 1]->header);
+	czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
+}
