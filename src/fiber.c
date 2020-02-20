@@ -467,10 +467,12 @@ void czsf_run(struct czsf_task_decl_t* decls, uint64_t count)
 			items[i - 1]->header.next = &item->header;
 		}
 	}
+
 	czsf_spinlock_acquire(&CZSF_GLOBAL_LOCK);
 	czsf_list_push_back(&CZSF_GLOBAL_QUEUE, &items[0]->header, &items[count - 1]->header);
 	czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
 }
+
 void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync)
 {
 	if (count == 0)
@@ -498,3 +500,18 @@ void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, struct czsf
 	czsf_list_push_back(&CZSF_GLOBAL_QUEUE, &items[0]->header, &items[count - 1]->header);
 	czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
 }
+
+#ifdef __cplusplus
+namespace czsf
+{
+
+czsf_task_decl_t taskDecl(void (*fn)())
+{
+	czsf_task_decl_t ret;
+	ret.fn = reinterpret_cast<void(*)(void*)>(fn);
+	ret.param = nullptr;
+	return ret;
+}
+
+}
+#endif
