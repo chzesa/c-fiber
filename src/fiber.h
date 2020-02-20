@@ -56,8 +56,8 @@ void czsf_wait(struct czsf_sync_t* self);
 
 void czsf_run(struct czsf_task_decl_t* decls, uint64_t count);
 void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync);
-void czsf_run_mono(void (*fn)(void*), void* param, uint64_t count);
-void czsf_run_mono_signal(void (*fn)(void*), void* param, uint64_t count, struct czsf_sync_t* sync);
+void czsf_run_mono(void (*fn)(void*), void* param, uint64_t param_size, uint64_t count);
+void czsf_run_mono_signal(void (*fn)(void*), void* param, uint64_t param_size, uint64_t count, struct czsf_sync_t* sync);
 
 #ifdef __cplusplus
 }
@@ -75,6 +75,23 @@ czsf_task_decl_t taskDecl(void (*fn)(T*), T* param)
 }
 
 czsf_task_decl_t taskDecl(void (*fn)());
+
+template<class T>
+void run(void (*fn)(T*), T* param, uint64_t count, struct czsf_sync_t* sync)
+{
+	czsf_run_signal(fn, param, sizeof(T), count, sync);
+}
+
+template<class T>
+void run(void (*fn)(T*), T* param, uint64_t count)
+{
+	czsf::run(fn, param, sizeof(T), count, nullptr);
+}
+
+void run(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync);
+void run(struct czsf_task_decl_t* decls, uint64_t count);
+void run(void (*fn)(), struct czsf_sync_t* sync);
+void run(void (*fn)());
 
 }
 #endif

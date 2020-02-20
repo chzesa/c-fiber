@@ -445,34 +445,6 @@ void czsf_wait(struct czsf_sync_t* self)
 	__czsf_yield(CZSF_YIELD_BLOCK);
 }
 
-void czsf_run(struct czsf_task_decl_t* decls, uint64_t count)
-{
-	if (count == 0)
-	{
-		return;
-	}
-
-	struct czsf_queue_item_t* items[count];
-
-	for (int i = 0; i < count; i++)
-	{
-		struct czsf_queue_item_t* item = (struct czsf_queue_item_t*)malloc(sizeof(czsf_queue_item_t));
-		*item = CZSF_QUEUE_ITEM_INIT;
-		item->task = decls[i];
-		item->sync = NULL;
-		items[i] = item;
-
-		if (i > 0)
-		{
-			items[i - 1]->header.next = &item->header;
-		}
-	}
-
-	czsf_spinlock_acquire(&CZSF_GLOBAL_LOCK);
-	czsf_list_push_back(&CZSF_GLOBAL_QUEUE, &items[0]->header, &items[count - 1]->header);
-	czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
-}
-
 void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync)
 {
 	if (count == 0)
@@ -501,6 +473,44 @@ void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, struct czsf
 	czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
 }
 
+void czsf_run(struct czsf_task_decl_t* decls, uint64_t count)
+{
+	czsf_run_signal(decls, count, NULL);
+}
+
+void czsf_run_mono_signal(void (*fn)(void*), void* param, uint64_t param_size, uint64_t count, struct czsf_sync_t* sync)
+{
+	if (count == 0)
+	{
+		return;
+	}
+
+	struct czsf_queue_item_t* items[count];
+
+	for (int i = 0; i < count; i++)
+	{
+		struct czsf_queue_item_t* item = (struct czsf_queue_item_t*)malloc(sizeof(czsf_queue_item_t));
+		*item = CZSF_QUEUE_ITEM_INIT;
+		item->task = czsf_task_decl(fn, (char*)(param) + i * param_size);
+		item->sync = sync;
+		items[i] = item;
+
+		if (i > 0)
+		{
+			items[i - 1]->header.next = &item->header;
+		}
+	}
+
+	czsf_spinlock_acquire(&CZSF_GLOBAL_LOCK);
+	czsf_list_push_back(&CZSF_GLOBAL_QUEUE, &items[0]->header, &items[count - 1]->header);
+	czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
+}
+
+void czsf_run_mono(void (*fn)(void*), void* param, uint64_t param_size, uint64_t count)
+{
+	czsf_run_mono_signal(fn, param, param_size, count, NULL);
+}
+
 #ifdef __cplusplus
 namespace czsf
 {
@@ -512,6 +522,11 @@ czsf_task_decl_t taskDecl(void (*fn)())
 	ret.param = nullptr;
 	return ret;
 }
+
+void run(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync) { czsf_run_signal(decls, count, sync); }
+void run(struct czsf_task_decl_t* decls, uint64_t count) { czsf::run(decls, count, nullptr); }
+void run(void (*fn)(), struct czsf_sync_t* sync) { czsf_run_mono_signal((void (*)(void*))(fn), nullptr, 0, 1, sync); }
+void run(void (*fn)()) { czsf::run(fn, nullptr); }
 
 }
 #endif
