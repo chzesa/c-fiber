@@ -1,25 +1,25 @@
-# CPP Fiber
+# C Fiber
 
-An implementation of green threads in c++.
+An implementation of green threads in c with c++ templates.
 
 Two synchronization primitives are provided
 * Semaphore: Allow a number of concurrent fibers
 * Barrier: All waiting fibers are released at once
 
-`wait()` on a sync primitive **must** be called from a fiber.
+`czsf_wait()` on a sync primitive **must** be called from a fiber.
 
 Based on the presentation [Parallelizing the Naughty Dog Engine Using Fibers](https://www.gdcvault.com/play/1022186/Parallelizing-the-Naughty-Dog-Engine).
 
-## Building
+## Building the example
 
 Linux:
 
 ```sh
-g++ src/fiber.cpp example.cpp -pthread
+g++ src/fiber.c example.cpp -pthread
 ```
 
 Windows:
 
 ```sh
-g++ src/fiber.cpp example.cpp
+g++ src/fiber.c example.cpp
 ```
