@@ -79,7 +79,7 @@ czsf_task_decl_t taskDecl(void (*fn)());
 template<class T>
 void run(void (*fn)(T*), T* param, uint64_t count, struct czsf_sync_t* sync)
 {
-	czsf_run_signal(fn, param, sizeof(T), count, sync);
+	czsf_run_mono_signal((void (*)(void*))(fn), param, sizeof(T), count, sync);
 }
 
 template<class T>
