@@ -4,14 +4,13 @@
 #include <atomic>
 #include <deque>
 
-#include "src/fiber.hpp"
+#include "src/fiber.h"
 using namespace std;
-using namespace czsfiber;
 
 // Input data for performing computations
 struct ComputeTask
 {
-	Semaphore* semaphore;
+	czsf_sync_t* semaphore;
 	uint64_t* input;
 	uint64_t* output;
 };
@@ -24,7 +23,7 @@ static bool EXITING = false;
 void waitForComputation(uint64_t* input)
 {
 	// Create semaphore to signal once computation is done
-	Semaphore sem;
+	czsf_sync_t sem = czsf_semaphore(0);
 
 	uint64_t result;
 
@@ -39,7 +38,7 @@ void waitForComputation(uint64_t* input)
 	COMPUTE_QUEUE_LOCK.clear();
 
 	// Halt fiber execution until semaphore is signaled
-	sem.wait();
+	czsf_wait(&sem);
 	cout << "Expensive computation finished: " << *input << " -> " << result << endl;
 }
 
@@ -65,27 +64,16 @@ void expensiveComputation()
 	*task.output = *task.input + 1;
 
 	// Signal the semaphore
-	task.semaphore->signal();
+	czsf_signal(task.semaphore);
 }
 
 // Demonstrating use of barrier
 void waitForAllComputations()
 {
-	TaskDecl decls[5];
+	czsf_sync_t barrier = czsf_barrier(5);
 	uint64_t inputData[] = {3, 6, 9, 12, 15};
-
-	// Create fiber declarations
-	for (int i = 0; i < 5; i++)
-	{
-		decls[i] = TaskDecl(waitForComputation, &inputData[i]);
-	}
-
-	Barrier* barrier;
-	// runTasks allocates a barrier in heap if pointer to Barrier* is passed
-	runTasks(decls, 5, &barrier);
-	barrier->wait();
-	// cleanup
-	delete barrier;
+	czsf::run(waitForComputation, inputData, 5, &barrier);
+	czsf_wait(&barrier);
 
 	cout << "All computations have finished." << endl;
 	EXITING = true;
@@ -94,16 +82,14 @@ void waitForAllComputations()
 int main()
 {
 	// Spawn some worker threads for concurrency
-	thread t1 ([] { while(!EXITING) { yield(); } });
-	thread t2 ([] { while(!EXITING) { yield(); } });
+	thread t1 ([] { while(!EXITING) { czsf_yield(); } });
+	thread t2 ([] { while(!EXITING) { czsf_yield(); } });
 	thread t3 ([] { while(!EXITING) { expensiveComputation(); } });
 
-	// Create fiber for demonstrating usage of barrier
-	TaskDecl decl(waitForAllComputations);
-	runTasks(&decl, 1, nullptr);
+	czsf::run(waitForAllComputations);
 
 	// Try to execute fibers
-	while(!EXITING) { yield(); }
+	while(!EXITING) { czsf_yield(); }
 
 	t1.join();
 	t2.join();
