@@ -65,6 +65,30 @@ void czsf_run_mono_signal(void (*fn)(void*), void* param, uint64_t param_size, u
 namespace czsf
 {
 
+struct Sync
+{
+	virtual void wait() = 0;
+	virtual void signal() = 0;
+protected:
+	czsf_sync_t s;
+};
+
+struct Barrier : Sync
+{
+	Barrier();
+	Barrier(int64_t value);
+	void wait() override;
+	void signal() override;
+};
+
+struct Semaphore : Sync
+{
+	Semaphore();
+	Semaphore(int64_t value);
+	void wait() override;
+	void signal() override;
+};
+
 template<class T>
 czsf_task_decl_t taskDecl(void (*fn)(T*), T* param)
 {

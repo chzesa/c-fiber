@@ -473,6 +473,16 @@ void czsf_run_mono(void (*fn)(void*), void* param, uint64_t param_size, uint64_t
 namespace czsf
 {
 
+Barrier::Barrier() { this->s = czsf_barrier(0); }
+Barrier::Barrier(int64_t value) { this->s = czsf_barrier(value); }
+void Barrier::wait() { czsf_wait(&this->s); }
+void Barrier::signal() { czsf_signal(&this->s); }
+
+Semaphore::Semaphore() { this->s = czsf_semaphore(0); }
+Semaphore::Semaphore(int64_t value) { this->s = czsf_semaphore(value); }
+void Semaphore::wait() { czsf_wait(&this->s); }
+void Semaphore::signal() { czsf_signal(&this->s); }
+
 czsf_task_decl_t taskDecl(void (*fn)())
 {
 	czsf_task_decl_t ret;
