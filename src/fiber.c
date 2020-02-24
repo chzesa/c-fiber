@@ -23,11 +23,11 @@
 	#define CZSF_NOINLINE __attribute__((noinline))
 #endif
 
-enum czsf_item_kind
-{
-	CZSF_FIBER,
-	CZSF_TASK_DESC
-};
+// Initialization macros
+#define CZSF_SPINLOCK_INIT { 0 }
+#define CZSF_LIST_INIT { NULL, NULL }
+#define CZSF_STACK_INIT { NULL }
+// #define CZSF_FIBER_INIT { CZSF_FIBER_HEADER_INIT }
 
 enum czsf_yield_kind
 {
@@ -46,13 +46,6 @@ enum czsf_fiber_status
 
 // ########
 
-#define CZSF_FIBER_HEADER_INIT { NULL, CZSF_FIBER }
-#define CZSF_QUEUE_ITEM_HEADER_INIT { NULL, CZSF_TASK_DESC }
-#define CZSF_SPINLOCK_INIT {0}
-#define CZSF_LIST_INIT {NULL, NULL}
-
-// ########
-
 void czsf_spinlock_acquire(struct czsf_spinlock_t* self)
 {
 	while(__sync_lock_test_and_set(&self->value, 1));
@@ -64,16 +57,21 @@ void czsf_spinlock_release(struct czsf_spinlock_t* self)
 }
 
 // ########
-
-struct czsf_item_header_t
+struct czsf_fiber_t
 {
-	struct czsf_item_header_t* next;
-	enum czsf_item_kind kind;
+	struct czsf_fiber_t* next;
+	enum czsf_fiber_status status;
+	uint64_t stack;
+	uint64_t base;
+	struct czsf_task_decl_t task;
+	struct czsf_sync_t* sync;
+	char* stack_space;
 };
 
-struct czsf_item_header_t* czsf_list_pop_front(struct czsf_list_t* self)
+// ########
+struct czsf_fiber_t* czsf_list_pop_front(struct czsf_list_t* self)
 {
-	struct czsf_item_header_t* ret = self->head;
+	struct czsf_fiber_t* ret = self->head;
 	if (ret != NULL)
 	{
 		self->head = ret->next;
@@ -82,7 +80,7 @@ struct czsf_item_header_t* czsf_list_pop_front(struct czsf_list_t* self)
 	return ret;
 }
 
-void czsf_list_push_back(struct czsf_list_t* self, struct czsf_item_header_t* head, struct czsf_item_header_t* tail)
+void czsf_list_push_back(struct czsf_list_t* self, struct czsf_fiber_t* head, struct czsf_fiber_t* tail)
 {
 	tail->next = NULL;
 	if (self->head == NULL)
@@ -97,7 +95,7 @@ void czsf_list_push_back(struct czsf_list_t* self, struct czsf_item_header_t* he
 	}
 }
 
-void czsf_list_push_front(struct czsf_list_t* self, struct czsf_item_header_t* head, struct czsf_item_header_t* tail)
+void czsf_list_push_front(struct czsf_list_t* self, struct czsf_fiber_t* head, struct czsf_fiber_t* tail)
 {
 	if (self->head == NULL)
 	{
@@ -107,65 +105,29 @@ void czsf_list_push_front(struct czsf_list_t* self, struct czsf_item_header_t* h
 	self->head = head;
 }
 
+// ######## Storing previously allocated stack space
+// Pointer to next item in ll stored as char* at head[0];
 struct czsf_stack_t
 {
-	struct czsf_item_header_t* head;
+	char* head;
 };
 
-#define CZSF_STACK_INIT {NULL}
-
-void czsf_stack_push(struct czsf_stack_t* self, struct czsf_item_header_t* item)
+void czsf_stack_push(struct czsf_stack_t* self, char* item)
 {
-	item->next = self->head;
+	*((char**)(item)) = self->head;
 	self->head = item;
 }
 
-struct czsf_item_header_t* czsf_stack_pop(struct czsf_stack_t* self)
+char* czsf_stack_pop(struct czsf_stack_t* self)
 {
-	struct czsf_item_header_t* ret = self->head;
+	char* ret = self->head;
 
 	if (ret != NULL)
 	{
-		self->head = ret->next;
+		self->head = *((char**)(ret));
 	}
 
 	return ret;
-}
-
-// ########
-struct czsf_queue_item_t
-{
-	struct czsf_item_header_t header;
-	struct czsf_task_decl_t task;
-	struct czsf_sync_t* sync;
-};
-
-#define CZSF_QUEUE_ITEM_INIT { CZSF_QUEUE_ITEM_HEADER_INIT }
-
-struct czsf_fiber_t
-{
-	struct czsf_item_header_t header;
-	char align[sizeof(struct czsf_item_header_t) % 2];
-	char stack_space[CZSF_STACK_SIZE];
-	uint64_t stack;
-	uint64_t base;
-	void (*fn)(void*);
-	void* param;
-
-	struct czsf_sync_t* sync;
-	enum czsf_fiber_status status;
-};
-
-#define CZSF_FIBER_INIT { CZSF_FIBER_HEADER_INIT }
-
-void czsf_reset_fiber(struct czsf_fiber_t* self, void (*fn)(void*), void* param, struct czsf_sync_t* sync)
-{
-	self->stack = uint64_t(&self->stack);
-	self->base = self->stack;
-	self->fn = fn;
-	self->param = param;
-	self->sync = sync;
-	self->status = CZSF_FIBER_STATUS_NEW;
 }
 
 // ########
@@ -185,7 +147,7 @@ struct czsf_task_decl_t czsf_task_decl2(void (*fn)())
 
 static struct czsf_list_t CZSF_GLOBAL_QUEUE = CZSF_LIST_INIT;
 static struct czsf_spinlock_t CZSF_GLOBAL_LOCK = CZSF_SPINLOCK_INIT;
-static CZSF_THREAD_LOCAL struct czsf_stack_t CZSF_STORED_FIBERS = CZSF_STACK_INIT;
+static CZSF_THREAD_LOCAL struct czsf_stack_t CZSF_ALLOCATED_STACK_SPACE = CZSF_STACK_INIT;
 
 static CZSF_THREAD_LOCAL struct czsf_fiber_t* CZSF_EXEC_FIBER = NULL;
 static CZSF_THREAD_LOCAL struct czsf_spinlock_t* CZSF_HELD_LOCK = NULL;
@@ -197,30 +159,31 @@ static CZSF_THREAD_LOCAL uint64_t CZSF_BASE = 0;
 struct czsf_fiber_t* czsf_acquire_next_fiber()
 {
 	czsf_spinlock_acquire(&CZSF_GLOBAL_LOCK);
-	struct czsf_item_header_t* d = czsf_list_pop_front(&CZSF_GLOBAL_QUEUE);
+	struct czsf_fiber_t* fiber = czsf_list_pop_front(&CZSF_GLOBAL_QUEUE);
 	czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
 
-	if (d == NULL)
+	if (fiber == NULL)
 	{
 		return NULL;
 	}
 
-	if (d->kind == CZSF_FIBER)
+	if (fiber->status == CZSF_FIBER_STATUS_BLOCKED)
 	{
-		return (struct czsf_fiber_t*)(d);
+		return fiber;
 	}
 
-	struct czsf_queue_item_t* qi = (struct czsf_queue_item_t*)(d);
-	struct czsf_fiber_t* fiber = (struct czsf_fiber_t*)(czsf_stack_pop(&CZSF_STORED_FIBERS));
+	// assert not done, not active
+	// fiber is new, grab stack space to use
+	char* stack_space = czsf_stack_pop(&CZSF_ALLOCATED_STACK_SPACE);
 
-	if (fiber == NULL)
+	if (stack_space == NULL)
 	{
-		fiber = (struct czsf_fiber_t*)(malloc(sizeof(struct czsf_fiber_t)));
+		stack_space = (char*)(malloc(CZSF_STACK_SIZE));
 	}
 
-	*fiber = CZSF_FIBER_INIT;
-	czsf_reset_fiber(fiber, qi->task.fn, qi->task.param, qi->sync);
-	free(qi);
+	fiber->stack = uint64_t(&stack_space[CZSF_STACK_SIZE]);
+	fiber->base = fiber->stack;
+	fiber->stack_space = stack_space;
 	return fiber;
 }
 
@@ -229,7 +192,7 @@ void __czsf_yield(enum czsf_yield_kind kind);
 void czsf_exec_fiber()
 {
 	struct czsf_fiber_t* fiber = CZSF_EXEC_FIBER;
-	fiber->fn(fiber->param);
+	fiber->task.fn(fiber->task.param);
 
 	if (fiber->sync != NULL)
 	{
@@ -277,7 +240,8 @@ CZSF_NOINLINE void __czsf_yield(enum czsf_yield_kind kind)
 		switch(fiber->status)
 		{
 		case CZSF_FIBER_STATUS_DONE:
-			czsf_stack_push(&CZSF_STORED_FIBERS, &fiber->header);
+			czsf_stack_push(&CZSF_ALLOCATED_STACK_SPACE, fiber->stack_space);
+			free(CZSF_EXEC_FIBER);
 			break;
 		case CZSF_FIBER_STATUS_BLOCKED:
 			CZSF_HELD_LOCK = NULL;
@@ -373,8 +337,8 @@ void czsf_signal(struct czsf_sync_t* self)
 		czsf_spinlock_acquire(&self->lock);
 		if (self->value > 0 && --self->value == 0)
 		{
-			struct czsf_item_header_t* head = self->queue.head;
-			struct czsf_item_header_t* tail = self->queue.tail;
+			struct czsf_fiber_t* head = self->queue.head;
+			struct czsf_fiber_t* tail = self->queue.tail;
 
 			self->queue.head = NULL;
 			czsf_spinlock_release(&self->lock);
@@ -395,7 +359,7 @@ void czsf_signal(struct czsf_sync_t* self)
 	{
 		czsf_spinlock_acquire(&self->lock);
 
-		struct czsf_item_header_t* head = czsf_list_pop_front(&self->queue);
+		struct czsf_fiber_t* head = czsf_list_pop_front(&self->queue);
 		if (head != NULL)
 		{
 			czsf_spinlock_release(&self->lock);
@@ -440,7 +404,7 @@ void czsf_wait(struct czsf_sync_t* self)
 	}
 
 	fiber->status = CZSF_FIBER_STATUS_BLOCKED;
-	czsf_list_push_back(&self->queue, &fiber->header, &fiber->header);
+	czsf_list_push_back(&self->queue, fiber, fiber);
 	CZSF_HELD_LOCK = &self->lock;
 	__czsf_yield(CZSF_YIELD_BLOCK);
 }
@@ -452,24 +416,24 @@ void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, struct czsf
 		return;
 	}
 
-	struct czsf_queue_item_t* items[count];
+	struct czsf_fiber_t* fibers[count];
 
 	for (int i = 0; i < count; i++)
 	{
-		struct czsf_queue_item_t* item = (struct czsf_queue_item_t*)malloc(sizeof(czsf_queue_item_t));
-		*item = CZSF_QUEUE_ITEM_INIT;
-		item->task = decls[i];
-		item->sync = sync;
-		items[i] = item;
+		struct czsf_fiber_t* fiber = (struct czsf_fiber_t*)malloc(sizeof(czsf_fiber_t));
+		fiber->status = CZSF_FIBER_STATUS_NEW;
+		fiber->task = decls[i];
+		fiber->sync = sync;
+		fibers[i] = fiber;
 
 		if (i > 0)
 		{
-			items[i - 1]->header.next = &item->header;
+			fibers[i - 1]->next = fiber;
 		}
 	}
 
 	czsf_spinlock_acquire(&CZSF_GLOBAL_LOCK);
-	czsf_list_push_back(&CZSF_GLOBAL_QUEUE, &items[0]->header, &items[count - 1]->header);
+	czsf_list_push_back(&CZSF_GLOBAL_QUEUE, fibers[0], fibers[count - 1]);
 	czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
 }
 
@@ -485,24 +449,24 @@ void czsf_run_mono_signal(void (*fn)(void*), void* param, uint64_t param_size, u
 		return;
 	}
 
-	struct czsf_queue_item_t* items[count];
+	struct czsf_fiber_t* fibers[count];
 
 	for (int i = 0; i < count; i++)
 	{
-		struct czsf_queue_item_t* item = (struct czsf_queue_item_t*)malloc(sizeof(czsf_queue_item_t));
-		*item = CZSF_QUEUE_ITEM_INIT;
-		item->task = czsf_task_decl(fn, (char*)(param) + i * param_size);
-		item->sync = sync;
-		items[i] = item;
+		struct czsf_fiber_t* fiber = (struct czsf_fiber_t*)malloc(sizeof(czsf_fiber_t));
+		fiber->status = CZSF_FIBER_STATUS_NEW;
+		fiber->task = czsf_task_decl(fn, (char*)(param) + i * param_size);
+		fiber->sync = sync;
+		fibers[i] = fiber;
 
 		if (i > 0)
 		{
-			items[i - 1]->header.next = &item->header;
+			fibers[i - 1]->next = fiber;
 		}
 	}
 
 	czsf_spinlock_acquire(&CZSF_GLOBAL_LOCK);
-	czsf_list_push_back(&CZSF_GLOBAL_QUEUE, &items[0]->header, &items[count - 1]->header);
+	czsf_list_push_back(&CZSF_GLOBAL_QUEUE, fibers[0], fibers[count - 1]);
 	czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
 }
 

@@ -22,11 +22,11 @@ struct czsf_task_decl_t
 	void* param;
 };
 
-struct czsf_item_header_t;
+struct czsf_fiber_t;
 struct czsf_list_t
 {
-	struct czsf_item_header_t* head;
-	struct czsf_item_header_t* tail;
+	struct czsf_fiber_t* head;
+	struct czsf_fiber_t* tail;
 };
 
 struct czsf_spinlock_t
