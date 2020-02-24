@@ -2,18 +2,6 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-#define PUSHA	"pushq %%rbx \n\t"	\
-		"pushq %%r12 \n\t"	\
-		"pushq %%r13 \n\t"	\
-		"pushq %%r14 \n\t"	\
-		"pushq %%r15 \n\t"
-
-#define POPA	"popq %%r15 \n\t"	\
-		"popq %%r14 \n\t"	\
-		"popq %%r13 \n\t"	\
-		"popq %%r12 \n\t"	\
-		"popq %%rbx"
-
 #ifdef WIN32
 	#define CZSF_THREAD_LOCAL __declspec(thread)
 	#define CZSF_NOINLINE __declspec(noinline)
@@ -199,6 +187,18 @@ void czsf_exec_fiber()
 	czsf_yield_return();
 }
 
+#define PUSHA	"pushq %%rbx \n\t"	\
+		"pushq %%r12 \n\t"	\
+		"pushq %%r13 \n\t"	\
+		"pushq %%r14 \n\t"	\
+		"pushq %%r15 \n\t"
+
+#define POPA	"popq %%r15 \n\t"	\
+		"popq %%r14 \n\t"	\
+		"popq %%r13 \n\t"	\
+		"popq %%r12 \n\t"	\
+		"popq %%rbx"
+
 #define CZSF_CONTINUE							\
 	switch (CZSF_EXEC_FIBER->status)				\
 	{								\
@@ -227,7 +227,7 @@ void czsf_exec_fiber()
 		return;							\
 	}
 
-CZSF_NOINLINE void czsf_yield_acquire()
+CZSF_NOINLINE void czsf_yield()
 {
 	CZSF_EXEC_FIBER = czsf_acquire_next_fiber();
 	if (CZSF_EXEC_FIBER == NULL)
@@ -301,11 +301,6 @@ CZSF_NOINLINE void czsf_yield_return()
 	}
 
 	CZSF_CONTINUE
-}
-
-void czsf_yield()
-{
-	czsf_yield_acquire();
 }
 
 // ########
