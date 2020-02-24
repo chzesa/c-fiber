@@ -227,7 +227,7 @@ CZSF_NOINLINE void __czsf_yield(enum czsf_yield_kind kind)
 
 		fiber->stack = stack;
 		fiber->base = base;
-		czsf_spinlock_release(CZSF_HELD_LOCK);
+
 	case CZSF_YIELD_RETURN:
 		stack = CZSF_STACK;
 		base = CZSF_BASE;
@@ -248,6 +248,7 @@ CZSF_NOINLINE void __czsf_yield(enum czsf_yield_kind kind)
 			free(CZSF_EXEC_FIBER);
 			break;
 		case CZSF_FIBER_STATUS_BLOCKED:
+			czsf_spinlock_release(CZSF_HELD_LOCK);
 			CZSF_HELD_LOCK = NULL;
 			break;
 		}
