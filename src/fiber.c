@@ -105,8 +105,11 @@ void czsf_list_push_front(struct czsf_list_t* self, struct czsf_fiber_t* head, s
 	self->head = head;
 }
 
-// ######## Storing previously allocated stack space
-// Pointer to next item in ll stored as char* at head[0];
+// ########
+// Storing previously allocated stack space
+// Pointer to next item in ll stored as char* at head[STACK_SIZE - 1];
+// Pointer to beginning of allocated area stored as char* at head[STACK_SIZE - 2];
+// Stack fills from right to left so this should minimise cache misses
 struct czsf_stack_t
 {
 	char* head;
@@ -114,7 +117,8 @@ struct czsf_stack_t
 
 void czsf_stack_push(struct czsf_stack_t* self, char* item)
 {
-	*((char**)(item)) = self->head;
+	*((char**)(&item[CZSF_STACK_SIZE - sizeof(char*)])) = self->head;
+	*((char**)(&item[CZSF_STACK_SIZE - 2 * sizeof(char*)])) = item;
 	self->head = item;
 }
 
@@ -124,7 +128,7 @@ char* czsf_stack_pop(struct czsf_stack_t* self)
 
 	if (ret != NULL)
 	{
-		self->head = *((char**)(ret));
+		self->head = *((char**)(&ret[CZSF_STACK_SIZE - sizeof(char*)]));
 	}
 
 	return ret;
