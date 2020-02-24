@@ -46,6 +46,7 @@ struct czsf_fiber_t
 	struct czsf_task_decl_t task;
 	struct czsf_sync_t* sync;
 	char* stack_space;
+	uint64_t* execution_counter;
 };
 
 // ########
@@ -282,7 +283,9 @@ CZSF_NOINLINE void czsf_yield_block()
 CZSF_NOINLINE void czsf_yield_return()
 {
 	czsf_stack_push(&CZSF_ALLOCATED_STACK_SPACE, CZSF_EXEC_FIBER->stack_space);
-	free(CZSF_EXEC_FIBER);
+	if(__atomic_sub_fetch(CZSF_EXEC_FIBER->execution_counter, 1, __ATOMIC_SEQ_CST) == 0){
+		free(CZSF_EXEC_FIBER->execution_counter);
+	}
 
 	CZSF_EXEC_FIBER = czsf_acquire_next_fiber();
 	if (CZSF_EXEC_FIBER == NULL)
@@ -405,24 +408,25 @@ void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, struct czsf
 		return;
 	}
 
-	struct czsf_fiber_t* fibers[count];
+	uint64_t* execution_counter = (uint64_t*)malloc(sizeof(uint64_t) + count * sizeof(czsf_fiber_t));
+	*execution_counter = count;
+	struct czsf_fiber_t* fibers = (czsf_fiber_t*)(execution_counter + 1);
 
 	for (int i = 0; i < count; i++)
 	{
-		struct czsf_fiber_t* fiber = (struct czsf_fiber_t*)malloc(sizeof(czsf_fiber_t));
-		fiber->status = CZSF_FIBER_STATUS_NEW;
-		fiber->task = decls[i];
-		fiber->sync = sync;
-		fibers[i] = fiber;
+		fibers[i].status = CZSF_FIBER_STATUS_NEW;
+		fibers[i].task = decls[i];
+		fibers[i].sync = sync;
+		fibers[i].execution_counter = execution_counter;
 
 		if (i > 0)
 		{
-			fibers[i - 1]->next = fiber;
+			fibers[i - 1].next = &fibers[i];
 		}
 	}
 
 	czsf_spinlock_acquire(&CZSF_GLOBAL_LOCK);
-	czsf_list_push_back(&CZSF_GLOBAL_QUEUE, fibers[0], fibers[count - 1]);
+	czsf_list_push_back(&CZSF_GLOBAL_QUEUE, &fibers[0], &fibers[count - 1]);
 	czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
 }
 
@@ -438,24 +442,25 @@ void czsf_run_mono_signal(void (*fn)(void*), void* param, uint64_t param_size, u
 		return;
 	}
 
-	struct czsf_fiber_t* fibers[count];
+	uint64_t* execution_counter = (uint64_t*)malloc(sizeof(uint64_t) + count * sizeof(czsf_fiber_t));
+	*execution_counter = count;
+	struct czsf_fiber_t* fibers = (czsf_fiber_t*)(execution_counter + 1);
 
 	for (int i = 0; i < count; i++)
 	{
-		struct czsf_fiber_t* fiber = (struct czsf_fiber_t*)malloc(sizeof(czsf_fiber_t));
-		fiber->status = CZSF_FIBER_STATUS_NEW;
-		fiber->task = czsf_task_decl(fn, (char*)(param) + i * param_size);
-		fiber->sync = sync;
-		fibers[i] = fiber;
+		fibers[i].status = CZSF_FIBER_STATUS_NEW;
+		fibers[i].task = czsf_task_decl(fn, (char*)(param) + i * param_size);
+		fibers[i].sync = sync;
+		fibers[i].execution_counter = execution_counter;
 
 		if (i > 0)
 		{
-			fibers[i - 1]->next = fiber;
+			fibers[i - 1].next = &fibers[i];
 		}
 	}
 
 	czsf_spinlock_acquire(&CZSF_GLOBAL_LOCK);
-	czsf_list_push_back(&CZSF_GLOBAL_QUEUE, fibers[0], fibers[count - 1]);
+	czsf_list_push_back(&CZSF_GLOBAL_QUEUE, &fibers[0], &fibers[count - 1]);
 	czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
 }
 
