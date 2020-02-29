@@ -282,13 +282,13 @@ CZSF_NOINLINE void czsf_yield_block()
 
 CZSF_NOINLINE void czsf_yield_return()
 {
-	struct czsf_fiber_t* fiber = CZSF_EXEC_FIBER;
+	char* stack_space = CZSF_EXEC_FIBER->stack_space;
 	if(__atomic_sub_fetch(CZSF_EXEC_FIBER->execution_counter, 1, __ATOMIC_SEQ_CST) == 0){
 		free(CZSF_EXEC_FIBER->execution_counter);
 	}
 
 	CZSF_EXEC_FIBER = czsf_acquire_next_fiber();
-	czsf_stack_push(&CZSF_ALLOCATED_STACK_SPACE, fiber->stack_space);
+	czsf_stack_push(&CZSF_ALLOCATED_STACK_SPACE, stack_space);
 
 	if (CZSF_EXEC_FIBER == NULL)
 	{
