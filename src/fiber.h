@@ -109,7 +109,7 @@ void run(void (*fn)(T*), T* param, uint64_t count, struct czsf_sync_t* sync)
 template<class T>
 void run(void (*fn)(T*), T* param, uint64_t count)
 {
-	czsf::run(fn, param, sizeof(T), count, nullptr);
+	czsf::run(fn, param, count, nullptr);
 }
 
 void run(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync);

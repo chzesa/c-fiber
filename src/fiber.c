@@ -1,6 +1,7 @@
 #include "fiber.h"
 #include <stddef.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #ifdef WIN32
 	#define CZSF_THREAD_LOCAL __declspec(thread)
@@ -166,7 +167,7 @@ struct czsf_fiber_t* czsf_acquire_next_fiber()
 		stack_space = (char*)(malloc(CZSF_STACK_SIZE));
 	}
 
-	fiber->stack = uint64_t(&stack_space[CZSF_STACK_SIZE]);
+	fiber->stack = (uint64_t)(&stack_space[CZSF_STACK_SIZE]);
 	fiber->base = fiber->stack;
 	fiber->stack_space = stack_space;
 	return fiber;
@@ -176,15 +177,14 @@ void czsf_yield_return();
 
 void czsf_exec_fiber()
 {
-	struct czsf_fiber_t* fiber = CZSF_EXEC_FIBER;
-	fiber->task.fn(fiber->task.param);
+	CZSF_EXEC_FIBER->task.fn(CZSF_EXEC_FIBER->task.param);
 
-	if (fiber->sync != NULL)
+	if (CZSF_EXEC_FIBER->sync != NULL)
 	{
-		czsf_signal(fiber->sync);
+		czsf_signal(CZSF_EXEC_FIBER->sync);
 	}
 
-	fiber->status = CZSF_FIBER_STATUS_DONE;
+	CZSF_EXEC_FIBER->status = CZSF_FIBER_STATUS_DONE;
 	czsf_yield_return();
 }
 
@@ -280,7 +280,7 @@ CZSF_NOINLINE void czsf_yield_block()
 	CZSF_CONTINUE
 }
 
-CZSF_NOINLINE void czsf_yield_return()
+void czsf_yield_return()
 {
 	char* stack_space = CZSF_EXEC_FIBER->stack_space;
 	if(__atomic_sub_fetch(CZSF_EXEC_FIBER->execution_counter, 1, __ATOMIC_SEQ_CST) == 0){
@@ -410,9 +410,9 @@ void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, struct czsf
 		return;
 	}
 
-	uint64_t* execution_counter = (uint64_t*)malloc(sizeof(uint64_t) + count * sizeof(czsf_fiber_t));
+	uint64_t* execution_counter = (uint64_t*)malloc(sizeof(uint64_t) + count * sizeof(struct czsf_fiber_t));
 	*execution_counter = count;
-	struct czsf_fiber_t* fibers = (czsf_fiber_t*)(execution_counter + 1);
+	struct czsf_fiber_t* fibers = (struct czsf_fiber_t*)(execution_counter + 1);
 
 	for (int i = 0; i < count; i++)
 	{
@@ -444,9 +444,9 @@ void czsf_run_mono_signal(void (*fn)(void*), void* param, uint64_t param_size, u
 		return;
 	}
 
-	uint64_t* execution_counter = (uint64_t*)malloc(sizeof(uint64_t) + count * sizeof(czsf_fiber_t));
+	uint64_t* execution_counter = (uint64_t*)malloc(sizeof(uint64_t) + count * sizeof(struct czsf_fiber_t));
 	*execution_counter = count;
-	struct czsf_fiber_t* fibers = (czsf_fiber_t*)(execution_counter + 1);
+	struct czsf_fiber_t* fibers = (struct czsf_fiber_t*)(execution_counter + 1);
 
 	for (int i = 0; i < count; i++)
 	{
