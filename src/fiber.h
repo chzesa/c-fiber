@@ -37,7 +37,7 @@ struct czsf_spinlock_t
 struct czsf_sync_t
 {
 	enum czsf_sync_kind kind;
-	int64_t value;
+	volatile int64_t value;
 	struct czsf_spinlock_t lock;
 	struct czsf_list_t queue;
 };
