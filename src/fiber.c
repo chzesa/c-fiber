@@ -471,6 +471,40 @@ void czsf_run_mono(void (*fn)(void*), void* param, uint64_t param_size, uint64_t
 	czsf_run_mono_signal(fn, param, param_size, count, NULL);
 }
 
+void czsf_run_mono_pp_signal(void (*fn)(void*), void** param, uint64_t count, struct czsf_sync_t* sync)
+{
+	if (count == 0)
+	{
+		return;
+	}
+
+	uint64_t* execution_counter = (uint64_t*)malloc(sizeof(uint64_t) + count * sizeof(struct czsf_fiber_t));
+	*execution_counter = count;
+	struct czsf_fiber_t* fibers = (struct czsf_fiber_t*)(execution_counter + 1);
+
+	for (int i = 0; i < count; i++)
+	{
+		fibers[i].status = CZSF_FIBER_STATUS_NEW;
+		fibers[i].task = czsf_task_decl(fn, param[i]);
+		fibers[i].sync = sync;
+		fibers[i].execution_counter = execution_counter;
+
+		if (i > 0)
+		{
+			fibers[i - 1].next = &fibers[i];
+		}
+	}
+
+	czsf_spinlock_acquire(&CZSF_GLOBAL_LOCK);
+	czsf_list_push_back(&CZSF_GLOBAL_QUEUE, &fibers[0], &fibers[count - 1]);
+	czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
+}
+
+void czsf_run_mono_pp(void (*fn)(void*), void** param, uint64_t count)
+{
+	czsf_run_mono_pp_signal(fn, param, count, NULL);
+}
+
 #ifdef __cplusplus
 namespace czsf
 {
