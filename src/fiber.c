@@ -131,6 +131,7 @@ struct czsf_task_decl_t czsf_task_decl2(void (*fn)())
 
 // ########
 
+static struct czsf_list_t CZSF_GLOBAL_RELEASE_QUEUE = CZSF_LIST_INIT;
 static struct czsf_list_t CZSF_GLOBAL_QUEUE = CZSF_LIST_INIT;
 static struct czsf_spinlock_t CZSF_GLOBAL_LOCK = CZSF_SPINLOCK_INIT;
 static CZSF_THREAD_LOCAL struct czsf_stack_t CZSF_ALLOCATED_STACK_SPACE = CZSF_STACK_INIT;
@@ -145,7 +146,11 @@ static CZSF_THREAD_LOCAL uint64_t CZSF_BASE = 0;
 struct czsf_fiber_t* czsf_acquire_next_fiber()
 {
 	czsf_spinlock_acquire(&CZSF_GLOBAL_LOCK);
-	struct czsf_fiber_t* fiber = czsf_list_pop_front(&CZSF_GLOBAL_QUEUE);
+	struct czsf_fiber_t* fiber = czsf_list_pop_front(&CZSF_GLOBAL_RELEASE_QUEUE);
+	if (fiber == NULL)
+	{
+		fiber = czsf_list_pop_front(&CZSF_GLOBAL_QUEUE);
+	}
 	czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
 
 	if (fiber == NULL)
@@ -340,7 +345,7 @@ void czsf_signal(struct czsf_sync_t* self)
 			if (head != NULL)
 			{
 				czsf_spinlock_acquire(&CZSF_GLOBAL_LOCK);
-				czsf_list_push_front(&CZSF_GLOBAL_QUEUE, head, tail);
+				czsf_list_push_back(&CZSF_GLOBAL_RELEASE_QUEUE, head, tail);
 				czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
 			}
 		}
@@ -359,7 +364,7 @@ void czsf_signal(struct czsf_sync_t* self)
 			czsf_spinlock_release(&self->lock);
 
 			czsf_spinlock_acquire(&CZSF_GLOBAL_LOCK);
-			czsf_list_push_front(&CZSF_GLOBAL_QUEUE, head, head);
+			czsf_list_push_back(&CZSF_GLOBAL_RELEASE_QUEUE, head, head);
 			czsf_spinlock_release(&CZSF_GLOBAL_LOCK);
 		}
 		else
