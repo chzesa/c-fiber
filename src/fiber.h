@@ -44,14 +44,14 @@ struct czsf_list_t
 
 // ########
 /*
-	Base synchronisation primitve type for threads.
+	Base synchronization primitive type for threads.
 	Unlike a spinlock, calling czsf_wait() on a
 	primitive halts the execution of the calling
 	fiber if the primitive's condition is not met.
 
 	Signaling a primitive with czsf_signal() never
 	causes the calling fiber to stop executing in
-	favour of a waiting fiber.
+	favor of a waiting fiber.
 
 	Two primitive types are supported:
 		* Semaphore, create with czsf_semaphore(value)
@@ -125,10 +125,10 @@ void czsf_yield();
 	czsf_run functions are used to queue up new fiber tasks for
 	execution.
 
-	Functions with _signal suffix take a syncrhronisation primitive
+	Functions with _signal suffix take a synchronization primitive
 	pointer (NULL or not null) and signal the primitive once the entire
 	execution of the fiber finishes (provided the pointer isn't null).
-	The synchronisation primitive must remain valid until all tasks in
+	The synchronization primitive must remain valid until all tasks in
 	the czsf_run call have signaled it.
 
 	Below are examples of how the different functions are to be used.

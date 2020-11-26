@@ -91,7 +91,7 @@ void czsf_list_push_front(struct czsf_list_t* self, struct czsf_fiber_t* head, s
 // Storing previously allocated stack space
 // Pointer to next item in ll stored as char* at head[STACK_SIZE - 1];
 // Pointer to beginning of allocated area stored as char* at head[STACK_SIZE - 2];
-// Stack fills from right to left so this should minimise cache misses
+// Stack fills from right to left so this should minimize cache misses
 struct czsf_stack_t
 {
 	char* head;
