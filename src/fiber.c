@@ -1,7 +1,5 @@
 #include "fiber.h"
-#include <stddef.h>
 #include <stdlib.h>
-#include <inttypes.h>
 
 #ifdef WIN32
 	#define CZSF_THREAD_LOCAL __declspec(thread)
@@ -528,14 +526,14 @@ czsf_task_decl_t taskDecl(void (*fn)())
 {
 	czsf_task_decl_t ret;
 	ret.fn = reinterpret_cast<void(*)(void*)>(fn);
-	ret.param = nullptr;
+	ret.param = NULL;
 	return ret;
 }
 
 void run(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync) { czsf_run_signal(decls, count, sync); }
-void run(struct czsf_task_decl_t* decls, uint64_t count) { czsf::run(decls, count, nullptr); }
-void run(void (*fn)(), struct czsf_sync_t* sync) { czsf_run_mono_signal((void (*)(void*))(fn), nullptr, 0, 1, sync); }
-void run(void (*fn)()) { czsf::run(fn, nullptr); }
+void run(struct czsf_task_decl_t* decls, uint64_t count) { czsf::run(decls, count, NULL); }
+void run(void (*fn)(), struct czsf_sync_t* sync) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, sync); }
+void run(void (*fn)()) { czsf::run(fn, NULL); }
 
 }
 #endif
