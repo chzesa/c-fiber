@@ -1,6 +1,6 @@
 # C Fiber
 
-An implementation of green threads in c with c++ templates.
+An implementation of green threads in c, with c++ templates, for x86_64 processors.
 
 Two synchronization primitives are provided
 * Semaphore: Allow a number of concurrent fibers
