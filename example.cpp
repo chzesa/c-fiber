@@ -7,10 +7,10 @@
 #include "src/fiber.h"
 using namespace std;
 
-// Input data for performing computations
+// Input data type for performing computations
 struct ComputeTask
 {
-	czsf_sync_t* semaphore;
+	czsf::Semaphore* semaphore;
 	uint64_t* input;
 	uint64_t* output;
 };
@@ -19,61 +19,48 @@ static deque<ComputeTask> COMPUTE_QUEUE;
 static std::atomic_flag COMPUTE_QUEUE_LOCK = ATOMIC_FLAG_INIT;
 static bool EXITING = false;
 
-// Demonstrating use of semaphore
+void addTaskToComputeQueue(ComputeTask task);
+bool getTaskFromComputeQueue(ComputeTask* task);
+
 void waitForComputation(uint64_t* input)
 {
-	// Create semaphore to signal once computation is done
-	czsf_sync_t sem = czsf_semaphore(0);
+	czsf::Semaphore sem(0);                                 // Semaphore to be signaled once computation finishes
 
 	uint64_t result;
 
-	ComputeTask task = {};
-	task.input = input;
-	task.output = &result;
-	task.semaphore = &sem;
+	ComputeTask task = {
+		semaphore: &sem,
+		input: input,
+		output: &result
+	};
 
-	// Add computation info to global computation queue
-	while (COMPUTE_QUEUE_LOCK.test_and_set(std::memory_order_relaxed));
-	COMPUTE_QUEUE.push_back(task);
-	COMPUTE_QUEUE_LOCK.clear();
+	addTaskToComputeQueue(task);
+	sem.wait();                                             // Wait on semaphore, execution continues once it's
+	                                                        // signaled
 
-	// Halt fiber execution until semaphore is signaled
-	czsf_wait(&sem);
-	cout << "Expensive computation finished: " << *input << " -> " << result << endl;
+	cout << "Expensive computation finished: "              // Announce result
+		<< *input << " -> " << result << endl;
 }
 
 void expensiveComputation()
 {
-	// Acquire next task from computation queue, if any
-	while (COMPUTE_QUEUE_LOCK.test_and_set(std::memory_order_relaxed));
-
 	ComputeTask task;
+	if (!getTaskFromComputeQueue(&task)) return;
 
-	if (COMPUTE_QUEUE.size() == 0) {
-		COMPUTE_QUEUE_LOCK.clear();
-		return;
-	} else {
-		task = COMPUTE_QUEUE.front();
-		COMPUTE_QUEUE.pop_front();
-	}
-
-	COMPUTE_QUEUE_LOCK.clear();
-
-	// Pretend the computation takes a while
-	this_thread::sleep_for(1s);
-	*task.output = *task.input + 1;
-
-	// Signal the semaphore
-	czsf_signal(task.semaphore);
+	this_thread::sleep_for(1s);                             // Pretend the computation takes a while
+	*task.output = *task.input + 1;                         // Write result
+	task.semaphore->signal();
 }
 
-// Demonstrating use of barrier
 void waitForAllComputations()
 {
-	czsf_sync_t barrier = czsf_barrier(5);
+	czsf::Barrier barrier(5);                               // Create a barrier with value equal to the number of
+	                                                        // tasks
+
 	uint64_t inputData[] = {3, 6, 9, 12, 15};
 	czsf::run(waitForComputation, inputData, 5, &barrier);
-	czsf_wait(&barrier);
+	barrier.wait();                                         // Execution continues once this barrier is signaled 5
+	                                                        // times
 
 	cout << "All computations have finished." << endl;
 	EXITING = true;
@@ -81,17 +68,42 @@ void waitForAllComputations()
 
 int main()
 {
-	// Spawn some worker threads for concurrency
-	thread t1 ([] { while(!EXITING) { czsf_yield(); } });
+	thread t1 ([] { while(!EXITING) { czsf_yield(); } });   // Spawn worker threads for concurrency
 	thread t2 ([] { while(!EXITING) { czsf_yield(); } });
 	thread t3 ([] { while(!EXITING) { expensiveComputation(); } });
 
-	czsf::run(waitForAllComputations);
+	czsf::run(waitForAllComputations);                      // Using Sync primitives requires they're called from a
+	                                                        // fiber, so at least one function must be run this way.
+	                                                        // Whether worker threads are initialized in main or
+	                                                        // from a fiber comes down to user preference.
 
-	// Try to execute fibers
-	while(!EXITING) { czsf_yield(); }
+	t1.join();                                              // Wait for work to finish. Some libraries require
+	t2.join();                                              // functions be called from the main thread only. In
+	t3.join();                                              // such a case condvars should be used to wake the main
+	                                                        // thread whenever necessary with a messaging system
+	                                                        // that allows the fibers to communicate with the main
+	                                                        // thread.
+}
 
-	t1.join();
-	t2.join();
-	t3.join();
+void addTaskToComputeQueue(ComputeTask task)
+{
+	while (COMPUTE_QUEUE_LOCK.test_and_set(std::memory_order_relaxed));
+	COMPUTE_QUEUE.push_back(task);
+	COMPUTE_QUEUE_LOCK.clear();
+}
+
+bool getTaskFromComputeQueue(ComputeTask* task)
+{
+	while (COMPUTE_QUEUE_LOCK.test_and_set(std::memory_order_relaxed));
+
+	if (COMPUTE_QUEUE.size() == 0) {
+		COMPUTE_QUEUE_LOCK.clear();
+		return false;
+	} else {
+		*task = COMPUTE_QUEUE.front();
+		COMPUTE_QUEUE.pop_front();
+	}
+
+	COMPUTE_QUEUE_LOCK.clear();
+	return true;
 }
