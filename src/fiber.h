@@ -177,7 +177,7 @@ struct Sync
 {
 	virtual void wait() = 0;
 	virtual void signal() = 0;
-protected:
+
 	czsf_sync_t s;
 };
 
@@ -218,6 +218,18 @@ template<class T>
 void run(void (*fn)(T*), T** param, uint64_t count, struct czsf_sync_t* sync)
 {
 	czsf_run_mono_pp_signal((void (*)(void*))(fn), (void**)param, count, sync);
+}
+
+template<class T>
+void run(void (*fn)(T*), T* param, uint64_t count, czsf::Sync* sync)
+{
+	czsf_run_mono_signal((void (*)(void*))(fn), param, sizeof(T), count, &sync->s);
+}
+
+template<class T>
+void run(void (*fn)(T*), T** param, uint64_t count, czsf::Sync* sync)
+{
+	czsf_run_mono_pp_signal((void (*)(void*))(fn), (void**)param, count, &sync->s);
 }
 
 template<class T>
