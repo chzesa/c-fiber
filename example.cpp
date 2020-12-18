@@ -4,7 +4,8 @@
 #include <atomic>
 #include <deque>
 
-#include "src/fiber.h"
+#define CZSF_IMPLEMENTATION
+#include "czsf.h"
 using namespace std;
 
 // Input data type for performing computations
