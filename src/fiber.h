@@ -235,13 +235,13 @@ void run(void (*fn)(T*), T** param, uint64_t count, czsf::Sync* sync)
 template<class T>
 void run(void (*fn)(T*), T* param, uint64_t count)
 {
-	czsf::run(fn, param, count, nullptr);
+	czsf_run_mono_signal((void (*)(void*))(fn), param, sizeof(T), count, nullptr);
 }
 
 template<class T>
 void run(void (*fn)(T*), T** param, uint64_t count)
 {
-	czsf::run(fn, param, count, nullptr);
+	czsf_run_mono_pp_signal((void (*)(void*))(fn), (void**)param, count, nullptr);
 }
 
 void run(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync);
