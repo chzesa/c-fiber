@@ -8,6 +8,12 @@ Two synchronization primitives are provided
 
 `czsf_wait()` on a sync primitive **must** be called from a fiber.
 
+To use the header-only version include the following snippet in a source file:
+```c++
+#define CZSF_IMPLEMENTATION
+#include "czsf.h"
+```
+
 Based on the presentation [Parallelizing the Naughty Dog Engine Using Fibers](https://www.gdcvault.com/play/1022186/Parallelizing-the-Naughty-Dog-Engine).
 
 ## Building the example
@@ -15,11 +21,11 @@ Based on the presentation [Parallelizing the Naughty Dog Engine Using Fibers](ht
 Linux:
 
 ```sh
-g++ src/fiber.c example.cpp -pthread
+g++ example.cpp -pthread
 ```
 
 Windows:
 
 ```sh
-g++ src/fiber.c example.cpp
+g++ example.cpp
 ```
