@@ -1,6 +1,8 @@
-//	Add the following to only one source file:
-//	#define CZSF_IMPLEMENTATION
-//	#include "czsf.h"
+/*
+	Add the following to only one source file:
+	#define CZSF_IMPLEMENTATION
+	#include "czsf.h"
+*/
 
 #ifndef CZSF_HEADERS_H
 #define CZSF_HEADERS_H
@@ -11,7 +13,6 @@
 
 #include <stdint.h>
 
-// ########
 /*
 	czsf_task_decl_t represents a single fiber execution.
 	Each consists of a function pointer and optionally
@@ -33,8 +34,6 @@ struct czsf_task_decl_t
 struct czsf_task_decl_t czsf_task_decl(void (*fn)(void*), void* param);
 struct czsf_task_decl_t czsf_task_decl2(void (*fn)());
 
-// ########
-
 struct czsf_fiber_t;
 struct czsf_list_t
 {
@@ -42,7 +41,6 @@ struct czsf_list_t
 	struct czsf_fiber_t* tail;
 };
 
-// ########
 /*
 	Base synchronization primitive type for threads.
 	Unlike a spinlock, calling czsf_wait() on a
@@ -113,13 +111,12 @@ struct czsf_sync_t czsf_barrier(int64_t count);
 void czsf_signal(struct czsf_sync_t* self);
 void czsf_wait(struct czsf_sync_t* self);
 
-// ########
+/*
+	Call repeatedly from a thread to execute fibers. This must not be
+	called from a fiber.
+*/
 
-// Call repeatedly from a thread to execute fibers. This must not be
-// called from a fiber.
 void czsf_yield();
-
-// ########
 
 /*
 	czsf_run functions are used to queue up new fiber tasks for
@@ -164,8 +161,6 @@ void czsf_run_mono_signal(void (*fn)(void*), void* param, uint64_t param_size, u
 
 void czsf_run_mono_pp_signal(void (*fn)(void*), void** param, uint64_t count, struct czsf_sync_t* sync);
 void czsf_run_mono_pp(void (*fn)(void*), void** param, uint64_t count);
-
-// ########
 
 #ifdef __cplusplus
 }
@@ -277,7 +272,6 @@ void run(void (*fn)());
 	#define CZSF_NOINLINE __attribute__((noinline))
 #endif
 
-// Initialization macros
 #define CZSF_SPINLOCK_INIT { 0 }
 #define CZSF_LIST_INIT { NULL, NULL }
 #define CZSF_STACK_INIT { NULL }
@@ -290,8 +284,6 @@ enum czsf_fiber_status
 	CZSF_FIBER_STATUS_DONE
 };
 
-// ########
-
 void czsf_spinlock_acquire(struct czsf_spinlock_t* self)
 {
 	while(__sync_lock_test_and_set(&self->value, 1));
@@ -302,7 +294,6 @@ void czsf_spinlock_release(struct czsf_spinlock_t* self)
 	__sync_lock_release(&self->value, 0);
 }
 
-// ########
 struct czsf_fiber_t
 {
 	struct czsf_fiber_t* next;
@@ -315,7 +306,6 @@ struct czsf_fiber_t
 	uint64_t* execution_counter;
 };
 
-// ########
 struct czsf_fiber_t* czsf_list_pop_front(struct czsf_list_t* self)
 {
 	struct czsf_fiber_t* ret = self->head;
@@ -352,11 +342,13 @@ void czsf_list_push_front(struct czsf_list_t* self, struct czsf_fiber_t* head, s
 	self->head = head;
 }
 
-// ########
-// Storing previously allocated stack space
-// Pointer to next item in ll stored as char* at head[STACK_SIZE - 1];
-// Pointer to beginning of allocated area stored as char* at head[STACK_SIZE - 2];
-// Stack fills from right to left so this should minimize cache misses
+/*
+	Storing previously allocated stack space
+	Pointer to next item in ll stored as char* at head[STACK_SIZE - 1];
+	Pointer to beginning of allocated area stored as char* at head[STACK_SIZE - 2];
+	Stack fills from right to left so this should minimize cache misses
+*/
+
 struct czsf_stack_t
 {
 	char* head;
@@ -381,7 +373,7 @@ char* czsf_stack_pop(struct czsf_stack_t* self)
 	return ret;
 }
 
-// ########
+
 struct czsf_task_decl_t czsf_task_decl(void (*fn)(void*), void* param)
 {
 	struct czsf_task_decl_t ret = {fn, param};
@@ -394,8 +386,6 @@ struct czsf_task_decl_t czsf_task_decl2(void (*fn)())
 	return ret;
 }
 
-// ########
-
 static struct czsf_list_t CZSF_GLOBAL_RELEASE_QUEUE = CZSF_LIST_INIT;
 static struct czsf_list_t CZSF_GLOBAL_QUEUE = CZSF_LIST_INIT;
 static struct czsf_spinlock_t CZSF_GLOBAL_LOCK = CZSF_SPINLOCK_INIT;
@@ -406,7 +396,6 @@ static CZSF_THREAD_LOCAL struct czsf_spinlock_t* CZSF_HELD_LOCK = NULL;
 
 static CZSF_THREAD_LOCAL uint64_t CZSF_STACK = 0;
 static CZSF_THREAD_LOCAL uint64_t CZSF_BASE = 0;
-// ########
 
 struct czsf_fiber_t* czsf_acquire_next_fiber()
 {
@@ -428,8 +417,6 @@ struct czsf_fiber_t* czsf_acquire_next_fiber()
 		return fiber;
 	}
 
-	// assert not done, not active
-	// fiber is new, grab stack space to use
 	char* stack_space = czsf_stack_pop(&CZSF_ALLOCATED_STACK_SPACE);
 
 	if (stack_space == NULL)
@@ -577,8 +564,6 @@ void czsf_yield_return()
 
 	CZSF_CONTINUE
 }
-
-// ########
 
 struct czsf_sync_t czsf_semaphore(int64_t value)
 {
