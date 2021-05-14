@@ -484,6 +484,8 @@ void czsf_exec_fiber()
 			,"r" (CZSF_EXEC_FIBER->base)			\
 		);							\
 		return;							\
+	case CZSF_FIBER_STATUS_ACTIVE: break;				\
+	case CZSF_FIBER_STATUS_DONE: break;				\
 	}
 
 CZSF_NOINLINE void czsf_yield()
