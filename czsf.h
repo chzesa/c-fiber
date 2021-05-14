@@ -471,6 +471,7 @@ void czsf_exec_fiber()
 			,"r" (CZSF_EXEC_FIBER->base)			\
 		);							\
 		czsf_exec_fiber();					\
+		/* Line is never reached */				\
 	case CZSF_FIBER_STATUS_BLOCKED:					\
 		CZSF_EXEC_FIBER->status = CZSF_FIBER_STATUS_ACTIVE;	\
 		asm volatile						\
