@@ -424,7 +424,7 @@ struct czsf_fiber_t* czsf_acquire_next_fiber()
 		stack_space = (char*)(malloc(CZSF_STACK_SIZE));
 	}
 
-	fiber->stack = (uint64_t)(&stack_space[CZSF_STACK_SIZE]);
+	fiber->stack = (uint64_t)(&stack_space[CZSF_STACK_SIZE]) - 16;
 	fiber->base = fiber->stack;
 	fiber->stack_space = stack_space;
 	return fiber;
