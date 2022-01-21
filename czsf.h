@@ -396,7 +396,6 @@ static CZSF_THREAD_LOCAL struct czsf_fiber_t* CZSF_EXEC_FIBER = NULL;
 static CZSF_THREAD_LOCAL struct czsf_spinlock_t* CZSF_HELD_LOCK = NULL;
 
 static CZSF_THREAD_LOCAL uint64_t CZSF_STACK = 0;
-static CZSF_THREAD_LOCAL uint64_t CZSF_BASE = 0;
 
 struct czsf_fiber_t* czsf_acquire_next_fiber()
 {
