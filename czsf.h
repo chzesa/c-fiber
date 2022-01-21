@@ -278,10 +278,8 @@ void run(void (*fn)());
 
 enum czsf_fiber_status
 {
-	CZSF_FIBER_STATUS_NEW,
-	CZSF_FIBER_STATUS_ACTIVE,
-	CZSF_FIBER_STATUS_BLOCKED,
-	CZSF_FIBER_STATUS_DONE
+	CZSF_FIBER_STATUS_NORMAL,
+	CZSF_FIBER_STATUS_BLOCKED
 };
 
 void czsf_spinlock_acquire(struct czsf_spinlock_t* self)
@@ -440,8 +438,6 @@ void czsf_exec_fiber()
 	{
 		czsf_signal(CZSF_EXEC_FIBER->sync);
 	}
-
-	CZSF_EXEC_FIBER->status = CZSF_FIBER_STATUS_DONE;
 	czsf_yield_return();
 }
 
@@ -489,8 +485,7 @@ CZSF_NOINLINE void czsf_yield()
 
 	switch (fiber->status)
 	{
-	case CZSF_FIBER_STATUS_NEW:
-		fiber->status = CZSF_FIBER_STATUS_ACTIVE;
+	case CZSF_FIBER_STATUS_NORMAL:
 		asm volatile
 		(
 			"movq %0, %%rsp\n\t"
@@ -501,7 +496,7 @@ CZSF_NOINLINE void czsf_yield()
 		czsf_exec_fiber();
 		/* Line is never reached */
 	case CZSF_FIBER_STATUS_BLOCKED:
-		fiber->status = CZSF_FIBER_STATUS_ACTIVE;
+		fiber->status = CZSF_FIBER_STATUS_NORMAL;
 		asm volatile
 		(
 			"movq %0, %%rsp\n\t"
@@ -510,8 +505,6 @@ CZSF_NOINLINE void czsf_yield()
 			:"r" (stack)
 		);
 		return;
-	case CZSF_FIBER_STATUS_ACTIVE: break;
-	case CZSF_FIBER_STATUS_DONE: break;
 	}
 }
 
@@ -665,7 +658,7 @@ struct czsf_fiber_t* czsf_allocate_tasks(uint64_t count, struct czsf_sync_t* syn
 
 	for (int i = 0; i < count; i++)
 	{
-		fibers[i].status = CZSF_FIBER_STATUS_NEW;
+		fibers[i].status = CZSF_FIBER_STATUS_NORMAL;
 		fibers[i].sync = sync;
 		fibers[i].execution_counter = execution_counter;
 		fibers[i].tasks_alloc = fibers;
