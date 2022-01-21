@@ -450,63 +450,70 @@ void czsf_exec_fiber()
 		"pushq %%r12 \n\t"	\
 		"pushq %%r13 \n\t"	\
 		"pushq %%r14 \n\t"	\
-		"pushq %%r15 \n\t"
+		"pushq %%r15 \n\t"	\
+		"pushq %%rbp \n\t"
 
-#define POPA	"popq %%r15 \n\t"	\
+#define POPA	"popq %%rbp \n\t"	\
+		"popq %%r15 \n\t"	\
 		"popq %%r14 \n\t"	\
 		"popq %%r13 \n\t"	\
 		"popq %%r12 \n\t"	\
 		"popq %%rbx"
 
-#define CZSF_CONTINUE							\
-	switch (CZSF_EXEC_FIBER->status)				\
-	{								\
-	case CZSF_FIBER_STATUS_NEW:					\
-		CZSF_EXEC_FIBER->status = CZSF_FIBER_STATUS_ACTIVE;	\
-		asm volatile						\
-		(							\
-			"movq %0, %%rsp\n\t"				\
-			"movq %1, %%rbp"				\
-			:						\
-			:"r" (CZSF_EXEC_FIBER->stack)			\
-			,"r" (CZSF_EXEC_FIBER->base)			\
-		);							\
-		czsf_exec_fiber();					\
-		/* Line is never reached */				\
-	case CZSF_FIBER_STATUS_BLOCKED:					\
-		CZSF_EXEC_FIBER->status = CZSF_FIBER_STATUS_ACTIVE;	\
-		asm volatile						\
-		(							\
-			"movq %0, %%rsp\n\t"				\
-			"movq %1, %%rbp\n\t"				\
-			POPA						\
-			:						\
-			:"r" (CZSF_EXEC_FIBER->stack)			\
-			,"r" (CZSF_EXEC_FIBER->base)			\
-		);							\
-		return;							\
-	case CZSF_FIBER_STATUS_ACTIVE: break;				\
-	case CZSF_FIBER_STATUS_DONE: break;				\
-	}
-
 CZSF_NOINLINE void czsf_yield()
 {
-	CZSF_EXEC_FIBER = czsf_acquire_next_fiber();
-	if (CZSF_EXEC_FIBER == NULL)
+	uint64_t stack;
+	struct czsf_fiber_t* fiber;
+
+	/*
+		push callee saved registers
+		push base pointer
+		store stack pointer in local variable
+	*/
+	asm volatile
+	(
+		PUSHA
+		"movq %%rsp, %0"
+		:"=r" (stack)
+	);
+
+	fiber = czsf_acquire_next_fiber();
+
+	if (fiber == NULL)
 	{
 		return;
 	}
 
-	asm volatile
-	(
-		PUSHA
-		"movq %%rsp, %0\n\t"
-		"movq %%rbp, %1"
-		:"=r" (CZSF_STACK)
-		,"=r" (CZSF_BASE)
-	);
+	CZSF_EXEC_FIBER = fiber;
+	CZSF_STACK = stack;
+	stack = fiber->stack;
 
-	CZSF_CONTINUE
+	switch (fiber->status)
+	{
+	case CZSF_FIBER_STATUS_NEW:
+		fiber->status = CZSF_FIBER_STATUS_ACTIVE;
+		asm volatile
+		(
+			"movq %0, %%rsp\n\t"
+			"movq %%rsp, %%rbp"
+			:
+			:"r" (stack)
+		);
+		czsf_exec_fiber();
+		/* Line is never reached */
+	case CZSF_FIBER_STATUS_BLOCKED:
+		fiber->status = CZSF_FIBER_STATUS_ACTIVE;
+		asm volatile
+		(
+			"movq %0, %%rsp\n\t"
+			POPA
+			:
+			:"r" (stack)
+		);
+		return;
+	case CZSF_FIBER_STATUS_ACTIVE: break;
+	case CZSF_FIBER_STATUS_DONE: break;
+	}
 }
 
 CZSF_NOINLINE void czsf_yield_block()
@@ -538,35 +545,61 @@ CZSF_NOINLINE void czsf_yield_block()
 		return;
 	}
 
-	CZSF_CONTINUE
-}
-
-void czsf_yield_return()
-{
-	char* stack_space = CZSF_EXEC_FIBER->stack_space;
-	if(__atomic_sub_fetch(CZSF_EXEC_FIBER->execution_counter, 1, __ATOMIC_SEQ_CST) == 0){
-		free(CZSF_EXEC_FIBER->execution_counter);
-	}
-
-	CZSF_EXEC_FIBER = czsf_acquire_next_fiber();
-	czsf_stack_push(&CZSF_ALLOCATED_STACK_SPACE, stack_space);
-
-	if (CZSF_EXEC_FIBER == NULL)
+	switch (CZSF_EXEC_FIBER->status)
 	{
+	case CZSF_FIBER_STATUS_NEW:
+		CZSF_EXEC_FIBER->status = CZSF_FIBER_STATUS_ACTIVE;
+		asm volatile
+		(
+			"movq %0, %%rsp\n\t"
+			"movq %1, %%rbp"
+			:
+			:"r" (CZSF_EXEC_FIBER->stack)
+			,"r" (CZSF_EXEC_FIBER->base)
+		);
+		czsf_exec_fiber();
+		/* Line is never reached */
+	case CZSF_FIBER_STATUS_BLOCKED:
+		CZSF_EXEC_FIBER->status = CZSF_FIBER_STATUS_ACTIVE;
 		asm volatile
 		(
 			"movq %0, %%rsp\n\t"
 			"movq %1, %%rbp\n\t"
 			POPA
 			:
-			:"r" (CZSF_STACK)
-			,"r" (CZSF_BASE)
+			:"r" (CZSF_EXEC_FIBER->stack)
+			,"r" (CZSF_EXEC_FIBER->base)
 		);
-
 		return;
+	case CZSF_FIBER_STATUS_ACTIVE: break;
+	case CZSF_FIBER_STATUS_DONE: break;
+	}
+}
+
+void czsf_yield_return()
+{
+	char* stack_space = CZSF_EXEC_FIBER->stack_space;
+	if(__atomic_sub_fetch(CZSF_EXEC_FIBER->execution_counter, 1, __ATOMIC_SEQ_CST) == 0) {
+		free(CZSF_EXEC_FIBER->execution_counter);
 	}
 
-	CZSF_CONTINUE
+	czsf_stack_push(&CZSF_ALLOCATED_STACK_SPACE, stack_space);
+
+	CZSF_EXEC_FIBER = NULL;
+	uint64_t stack = CZSF_STACK;
+
+	/*
+		restore stack pointer
+		pop callee saved registers
+		restore base pointer
+	*/
+	asm volatile
+	(
+		"movq %0, %%rsp\n\t"
+		POPA
+		:
+		:"r" (stack)
+	);
 }
 
 struct czsf_sync_t czsf_semaphore(int64_t value)
