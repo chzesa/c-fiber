@@ -518,62 +518,25 @@ CZSF_NOINLINE void czsf_yield()
 
 CZSF_NOINLINE void czsf_yield_block()
 {
+	uint64_t stack;
 	asm volatile
 	(
 		PUSHA
-		"movq %%rsp, %0\n\t"
-		"movq %%rbp, %1"
-		:"=r" (CZSF_EXEC_FIBER->stack)
-		,"=r" (CZSF_EXEC_FIBER->base)
+		"movq %%rsp, %0"
+		:"=r" (stack)
 	);
 
-	CZSF_EXEC_FIBER = czsf_acquire_next_fiber();
+	CZSF_EXEC_FIBER->stack = stack;
 	czsf_spinlock_release(CZSF_HELD_LOCK);
 
-	if (CZSF_EXEC_FIBER == NULL)
-	{
-		asm volatile
-		(
-			"movq %0, %%rsp\n\t"
-			"movq %1, %%rbp\n\t"
-			POPA
-			:
-			:"r" (CZSF_STACK)
-			,"r" (CZSF_BASE)
-		);
-
-		return;
-	}
-
-	switch (CZSF_EXEC_FIBER->status)
-	{
-	case CZSF_FIBER_STATUS_NEW:
-		CZSF_EXEC_FIBER->status = CZSF_FIBER_STATUS_ACTIVE;
-		asm volatile
-		(
-			"movq %0, %%rsp\n\t"
-			"movq %1, %%rbp"
-			:
-			:"r" (CZSF_EXEC_FIBER->stack)
-			,"r" (CZSF_EXEC_FIBER->base)
-		);
-		czsf_exec_fiber();
-		/* Line is never reached */
-	case CZSF_FIBER_STATUS_BLOCKED:
-		CZSF_EXEC_FIBER->status = CZSF_FIBER_STATUS_ACTIVE;
-		asm volatile
-		(
-			"movq %0, %%rsp\n\t"
-			"movq %1, %%rbp\n\t"
-			POPA
-			:
-			:"r" (CZSF_EXEC_FIBER->stack)
-			,"r" (CZSF_EXEC_FIBER->base)
-		);
-		return;
-	case CZSF_FIBER_STATUS_ACTIVE: break;
-	case CZSF_FIBER_STATUS_DONE: break;
-	}
+	stack = CZSF_STACK;
+	asm volatile
+	(
+		"movq %0, %%rsp\n\t"
+		POPA
+		:
+		:"r" (stack)
+	);
 }
 
 void czsf_yield_return()
