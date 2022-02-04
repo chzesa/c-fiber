@@ -760,7 +760,8 @@ czsf_task_decl_t taskDecl(void (*fn)())
 void run(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync) { czsf_run_signal(decls, count, sync); }
 void run(struct czsf_task_decl_t* decls, uint64_t count) { czsf::run(decls, count, NULL); }
 void run(void (*fn)(), struct czsf_sync_t* sync) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, sync); }
-void run(void (*fn)()) { czsf::run(fn, NULL); }
+void run(void (*fn)(), czsf::Sync* sync) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, &sync->s); }
+void run(void (*fn)()) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, NULL); }
 
 }
 #endif
