@@ -300,7 +300,7 @@ struct czsf_fiber_t
 	struct czsf_sync_t* sync;
 	char* stack_space;
 	uint64_t* execution_counter;
-	struct czsf_fiber_t* tasks_alloc;
+	uint64_t count;
 };
 
 struct czsf_fiber_t* czsf_list_pop_front(struct czsf_list_t* self)
@@ -551,7 +551,7 @@ void czsf_yield_return()
 {
 	char* stack_space = CZSF_EXEC_FIBER->stack_space;
 	if(__atomic_sub_fetch(CZSF_EXEC_FIBER->execution_counter, 1, __ATOMIC_SEQ_CST) == 0) {
-		free(CZSF_EXEC_FIBER->execution_counter);
+		free((void*)(uint64_t(CZSF_EXEC_FIBER->execution_counter) - CZSF_EXEC_FIBER->count * sizeof(czsf_fiber_t)));
 	}
 
 	czsf_stack_push(&CZSF_ALLOCATED_STACK_SPACE, stack_space);
@@ -656,16 +656,16 @@ void czsf_wait(struct czsf_sync_t* self)
 
 struct czsf_fiber_t* czsf_allocate_tasks(uint64_t count, struct czsf_sync_t* sync)
 {
-	uint64_t* execution_counter = (uint64_t*)malloc(sizeof(uint64_t));
+	struct czsf_fiber_t* fibers = (struct czsf_fiber_t*)malloc(count * sizeof(struct czsf_fiber_t) + sizeof(uint64_t));
+	uint64_t* execution_counter = (uint64_t*)((uint64_t)fibers + count * sizeof(struct czsf_fiber_t));
 	*execution_counter = count;
-	struct czsf_fiber_t* fibers = (struct czsf_fiber_t*)malloc(count * sizeof(struct czsf_fiber_t));
 
 	for (int i = 0; i < count; i++)
 	{
 		fibers[i].status = CZSF_FIBER_STATUS_NORMAL;
 		fibers[i].sync = sync;
 		fibers[i].execution_counter = execution_counter;
-		fibers[i].tasks_alloc = fibers;
+		fibers[i].count = count;
 
 		if (i > 0)
 		{
