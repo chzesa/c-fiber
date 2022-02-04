@@ -265,11 +265,9 @@ void run(void (*fn)());
 
 #ifdef WIN32
 	#define CZSF_THREAD_LOCAL __declspec(thread)
-	#define CZSF_NOINLINE __declspec(noinline)
 #else
 	#include <threads.h>
 	#define CZSF_THREAD_LOCAL thread_local
-	#define CZSF_NOINLINE __attribute__((noinline))
 #endif
 
 #define CZSF_SPINLOCK_INIT { 0 }
