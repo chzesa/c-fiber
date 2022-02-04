@@ -441,46 +441,81 @@ void czsf_exec_fiber()
 	czsf_yield_return();
 }
 
-#define PUSHA	"pushq %%rbx \n\t"	\
-		"pushq %%r12 \n\t"	\
-		"pushq %%r13 \n\t"	\
-		"pushq %%r14 \n\t"	\
-		"pushq %%r15 \n\t"	\
-		"pushq %%rbp \n\t"
+#define PUSHA			\
+	"pushq %%rax \n\t"	\
+	"pushq %%rdi \n\t"	\
+	"pushq %%rsi \n\t"	\
+	"pushq %%rdx \n\t"	\
+	"pushq %%rcx \n\t"	\
+	"pushq %%r8 \n\t"	\
+	"pushq %%r9 \n\t"	\
+	"pushq %%r10 \n\t"	\
+	"pushq %%r11 \n\t"	\
+	"pushq %%rbx \n\t"	\
+	"pushq %%r12 \n\t"	\
+	"pushq %%r13 \n\t"	\
+	"pushq %%r14 \n\t"	\
+	"pushq %%r15 \n\t"	\
+	"pushq %%rbp \n\t"
 
-#define POPA	"popq %%rbp \n\t"	\
-		"popq %%r15 \n\t"	\
-		"popq %%r14 \n\t"	\
-		"popq %%r13 \n\t"	\
-		"popq %%r12 \n\t"	\
-		"popq %%rbx"
+#define POPA			\
+	"popq %%rbp \n\t"	\
+	"popq %%r15 \n\t"	\
+	"popq %%r14 \n\t"	\
+	"popq %%r13 \n\t"	\
+	"popq %%r12 \n\t"	\
+	"popq %%rbx \n\t"	\
+	"popq %%r11 \n\t"	\
+	"popq %%r10 \n\t"	\
+	"popq %%r9 \n\t"	\
+	"popq %%r8 \n\t"	\
+	"popq %%rcx \n\t"	\
+	"popq %%rdx \n\t"	\
+	"popq %%rsi \n\t"	\
+	"popq %%rdi \n\t"	\
+	"popq %%rax \n\t"
 
-CZSF_NOINLINE void czsf_yield()
-{
-	uint64_t stack;
-	struct czsf_fiber_t* fiber;
-
-	/*
-		push callee saved registers
-		push base pointer
-		store stack pointer in local variable
-	*/
-	asm volatile
-	(
-		PUSHA
-		"movq %%rsp, %0"
-		:"=r" (stack)
+#define CZSF_STORE_AND_CALL(store, fun_label)	\
+	uint64_t stack;				\
+	asm volatile				\
+	(					\
+		PUSHA				\
+		"movq %%rsp, %0"		\
+		:"=r" (stack)			\
+	);					\
+	*store = stack - 8;			\
+	asm volatile				\
+	(					\
+		"movq %0, %%rsp \n\t"		\
+		"call " fun_label "\n\t"	\
+		POPA				\
+		:				\
+		: "r" (stack)			\
 	);
 
-	fiber = czsf_acquire_next_fiber();
+#define CZSF_RETURN_TO_STACK			\
+	asm volatile				\
+	(					\
+		"movq %0, %%rsp\n\t"		\
+		"ret"				\
+		:				\
+		:"r" (stack)			\
+	);
+
+void czsf_yield_2() asm("czsf_yield_2");
+void czsf_yield_2()
+{
+	struct czsf_fiber_t* fiber = czsf_acquire_next_fiber();
+	uint64_t stack;
 
 	if (fiber == NULL)
 	{
+		stack = CZSF_STACK;
+		CZSF_RETURN_TO_STACK
 		return;
 	}
 
 	CZSF_EXEC_FIBER = fiber;
-	CZSF_STACK = stack;
 	stack = fiber->stack;
 
 	switch (fiber->status)
@@ -497,38 +532,21 @@ CZSF_NOINLINE void czsf_yield()
 		/* Line is never reached */
 	case CZSF_FIBER_STATUS_BLOCKED:
 		fiber->status = CZSF_FIBER_STATUS_NORMAL;
-		asm volatile
-		(
-			"movq %0, %%rsp\n\t"
-			POPA
-			:
-			:"r" (stack)
-		);
-		return;
+		CZSF_RETURN_TO_STACK
 	}
 }
 
-CZSF_NOINLINE void czsf_yield_block()
+void czsf_yield()
 {
-	uint64_t stack;
-	asm volatile
-	(
-		PUSHA
-		"movq %%rsp, %0"
-		:"=r" (stack)
-	);
+	CZSF_STORE_AND_CALL(&CZSF_STACK, "czsf_yield_2")
+}
 
-	CZSF_EXEC_FIBER->stack = stack;
+void czsf_yield_block() asm ("czsf_yield_block");
+void czsf_yield_block()
+{
 	czsf_spinlock_release(CZSF_HELD_LOCK);
-
-	stack = CZSF_STACK;
-	asm volatile
-	(
-		"movq %0, %%rsp\n\t"
-		POPA
-		:
-		:"r" (stack)
-	);
+	uint64_t stack = CZSF_STACK;
+	CZSF_RETURN_TO_STACK
 }
 
 void czsf_yield_return()
@@ -542,19 +560,7 @@ void czsf_yield_return()
 
 	CZSF_EXEC_FIBER = NULL;
 	uint64_t stack = CZSF_STACK;
-
-	/*
-		restore stack pointer
-		pop callee saved registers
-		restore base pointer
-	*/
-	asm volatile
-	(
-		"movq %0, %%rsp\n\t"
-		POPA
-		:
-		:"r" (stack)
-	);
+	CZSF_RETURN_TO_STACK
 }
 
 struct czsf_sync_t czsf_semaphore(int64_t value)
@@ -647,7 +653,7 @@ void czsf_wait(struct czsf_sync_t* self)
 	fiber->status = CZSF_FIBER_STATUS_BLOCKED;
 	czsf_list_push_back(&self->queue, fiber, fiber);
 	CZSF_HELD_LOCK = &self->lock;
-	czsf_yield_block();
+	CZSF_STORE_AND_CALL(&CZSF_EXEC_FIBER->stack, "czsf_yield_block")
 }
 
 struct czsf_fiber_t* czsf_allocate_tasks(uint64_t count, struct czsf_sync_t* sync)
