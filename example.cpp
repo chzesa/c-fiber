@@ -18,7 +18,7 @@ struct ComputeTask
 
 static deque<ComputeTask> COMPUTE_QUEUE;
 static std::atomic_flag COMPUTE_QUEUE_LOCK = ATOMIC_FLAG_INIT;
-static bool EXITING = false;
+volatile static bool EXITING = false;
 
 void addTaskToComputeQueue(ComputeTask task);
 bool getTaskFromComputeQueue(ComputeTask* task);
