@@ -242,6 +242,7 @@ void run(void (*fn)(T*), T** param, uint64_t count)
 void run(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync);
 void run(struct czsf_task_decl_t* decls, uint64_t count);
 void run(void (*fn)(), struct czsf_sync_t* sync);
+void run(void (*fn)(), czsf::Sync* sync);
 void run(void (*fn)());
 
 }
