@@ -418,7 +418,7 @@ static CZSF_THREAD_LOCAL uint64_t CZSF_STACK = 0;
 
 uint64_t get_fls_loc(struct czsf_fiber_t* fiber)
 {
-	uint64_t fls_loc = fiber->stack - fiber->fls_size;
+	uint64_t fls_loc = (uint64_t)(&fiber->stack_space[CZSF_STACK_SIZE]) - fiber->fls_size;
 	return fls_loc - fls_loc % fiber->fls_align;
 }
 
