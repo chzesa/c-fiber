@@ -128,6 +128,16 @@ void czsf_yield();
 	The synchronization primitive must remain valid until all tasks in
 	the czsf_run call have signaled it.
 
+	Functions with _fls suffix enable adding data to a fiber-local
+	storage. Since fibers can execute in any thread, using thread-local
+	storage might cause problems when used in fibers so fls offers a
+	similar mechanism. Each task will have their own copy of this data.
+	The data pointed to is copied as-is when the task is first selected
+	for execution. so the pointer must remain valid until all tasks
+	have been started. Since there is no mechanism to detect this, it
+	is recommended that the pointer remain valid until all tasks have
+	finished. The data pointer _must not_ be null.
+
 	Below are examples of how the different functions are to be used.
 */
 
@@ -141,6 +151,8 @@ void czsf_yield();
 
 void czsf_run(struct czsf_task_decl_t* decls, uint64_t count);
 void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync);
+void czsf_run_fls(struct czsf_task_decl_t* decls, uint64_t count, void* data, uint64_t size_of_data, uint64_t align_of_data);
+void czsf_run_signal_fls(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync, void* data, uint64_t size_of_data, uint64_t align_of_data);
 
 /*
 	void task(Data* d);
@@ -151,6 +163,8 @@ void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, struct czsf
 
 void czsf_run_mono(void (*fn)(void*), void* param, uint64_t param_size, uint64_t count);
 void czsf_run_mono_signal(void (*fn)(void*), void* param, uint64_t param_size, uint64_t count, struct czsf_sync_t* sync);
+void czsf_run_mono_fls(void (*fn)(void*), void* param, uint64_t param_size, uint64_t count, void* data, uint64_t size_of_data, uint64_t align_of_data);
+void czsf_run_mono_signal_fls(void (*fn)(void*), void* param, uint64_t param_size, uint64_t count, struct czsf_sync_t* sync, void* data, uint64_t size_of_data, uint64_t align_of_data);
 
 /*
 	void task(Data* d);
@@ -159,8 +173,12 @@ void czsf_run_mono_signal(void (*fn)(void*), void* param, uint64_t param_size, u
 	czsf_run_mono_pp(task, params, 3);
 */
 
-void czsf_run_mono_pp_signal(void (*fn)(void*), void** param, uint64_t count, struct czsf_sync_t* sync);
 void czsf_run_mono_pp(void (*fn)(void*), void** param, uint64_t count);
+void czsf_run_mono_pp_signal(void (*fn)(void*), void** param, uint64_t count, struct czsf_sync_t* sync);
+void czsf_run_mono_pp_fls(void (*fn)(void*), void** param, uint64_t count, void* data, uint64_t size_of_data, uint64_t align_of_data);
+void czsf_run_mono_pp_signal_fls(void (*fn)(void*), void** param, uint64_t count, struct czsf_sync_t* sync, void* data, uint64_t size_of_data, uint64_t align_of_data);
+
+void* czsf_get_fls();
 
 #ifdef __cplusplus
 }
@@ -263,6 +281,7 @@ void run(void (*fn)());
 #endif
 
 #include <stdlib.h>
+#include <string.h>
 
 #ifdef WIN32
 	#define CZSF_THREAD_LOCAL __declspec(thread)
@@ -302,6 +321,9 @@ struct czsf_fiber_t
 	char* stack_space;
 	uint64_t* execution_counter;
 	uint64_t count;
+	void* fls_ptr;
+	uint64_t fls_size;
+	uint64_t fls_align;
 };
 
 struct czsf_fiber_t* czsf_list_pop_front(struct czsf_list_t* self)
@@ -394,6 +416,20 @@ static CZSF_THREAD_LOCAL struct czsf_spinlock_t* CZSF_HELD_LOCK = NULL;
 
 static CZSF_THREAD_LOCAL uint64_t CZSF_STACK = 0;
 
+uint64_t get_fls_loc(struct czsf_fiber_t* fiber)
+{
+	uint64_t fls_loc = fiber->stack - fiber->fls_size;
+	return fls_loc - fls_loc % fiber->fls_align;
+}
+
+void* czsf_get_fls()
+{
+	if (CZSF_EXEC_FIBER->fls_ptr == NULL)
+		return NULL;
+
+	return (void*)get_fls_loc(CZSF_EXEC_FIBER);
+}
+
 struct czsf_fiber_t* czsf_acquire_next_fiber()
 {
 	czsf_spinlock_acquire(&CZSF_GLOBAL_LOCK);
@@ -421,9 +457,21 @@ struct czsf_fiber_t* czsf_acquire_next_fiber()
 		stack_space = (char*)(malloc(CZSF_STACK_SIZE));
 	}
 
-	fiber->stack = (uint64_t)(&stack_space[CZSF_STACK_SIZE]) - 16;
-	fiber->base = fiber->stack;
+	fiber->stack = (uint64_t)(&stack_space[CZSF_STACK_SIZE]);
 	fiber->stack_space = stack_space;
+
+	if (fiber->fls_ptr != NULL)
+	{
+		uint64_t fls_loc = get_fls_loc(fiber);
+		memcpy((char*)(fls_loc), (char*)(fiber->fls_ptr), fiber->fls_size);
+		fiber->base = fls_loc;
+	}
+
+	// Make room for pushq
+	fiber->base = fiber->base - 8;
+	// Align stack
+	fiber->base -= fiber->base % 16;
+
 	return fiber;
 }
 
@@ -667,6 +715,33 @@ struct czsf_fiber_t* czsf_allocate_tasks(uint64_t count, struct czsf_sync_t* syn
 		fibers[i].sync = sync;
 		fibers[i].execution_counter = execution_counter;
 		fibers[i].count = count;
+		fibers[i].fls_ptr = NULL;
+
+		if (i > 0)
+		{
+			fibers[i - 1].next = &fibers[i];
+		}
+	}
+
+	return fibers;
+}
+
+struct czsf_fiber_t* czsf_allocate_tasks_fls(uint64_t count, struct czsf_sync_t* sync, void* data, uint64_t size_of_data, uint64_t align_of_data)
+{
+	struct czsf_fiber_t* fibers = (struct czsf_fiber_t*)malloc(count * sizeof(struct czsf_fiber_t) + sizeof(uint64_t));
+	uint64_t* execution_counter = (uint64_t*)((uint64_t)fibers + count * sizeof(struct czsf_fiber_t));
+	*execution_counter = count;
+
+	for (int i = 0; i < count; i++)
+	{
+		fibers[i].status = CZSF_FIBER_STATUS_NORMAL;
+		fibers[i].sync = sync;
+		fibers[i].execution_counter = execution_counter;
+		fibers[i].count = count;
+
+		fibers[i].fls_ptr = data;
+		fibers[i].fls_size = size_of_data;
+		fibers[i].fls_align = align_of_data;
 
 		if (i > 0)
 		{
@@ -736,6 +811,58 @@ void czsf_run_mono_pp(void (*fn)(void*), void** param, uint64_t count)
 	czsf_run_mono_pp_signal(fn, param, count, NULL);
 }
 
+void czsf_run_signal_fls(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync, void* data, uint64_t size_of_data, uint64_t align_of_data)
+{
+	if (count == 0)
+		return;
+
+	struct czsf_fiber_t* fibers = czsf_allocate_tasks_fls(count, sync, data, size_of_data, align_of_data);
+	for (int i = 0; i < count; i++)
+		fibers[i].task = decls[i];
+
+	czsf_fibers_post(fibers, count);
+}
+
+void czsf_run_mono_signal_fls(void (*fn)(void*), void* param, uint64_t param_size, uint64_t count, struct czsf_sync_t* sync, void* data, uint64_t size_of_data, uint64_t align_of_data)
+{
+	if (count == 0)
+		return;
+
+	struct czsf_fiber_t* fibers = czsf_allocate_tasks_fls(count, sync, data, size_of_data, align_of_data);
+	for (int i = 0; i < count; i++)
+		fibers[i].task = czsf_task_decl(fn, (char*)(param) + i * param_size);
+
+	czsf_fibers_post(fibers, count);
+}
+
+void czsf_run_mono_pp_signal_fls(void (*fn)(void*), void** param, uint64_t count, struct czsf_sync_t* sync, void* data, uint64_t size_of_data, uint64_t align_of_data)
+{
+	if (count == 0)
+		return;
+
+	struct czsf_fiber_t* fibers = czsf_allocate_tasks_fls(count, sync, data, size_of_data, align_of_data);
+
+	for (int i = 0; i < count; i++)
+		fibers[i].task = czsf_task_decl(fn, param[i]);
+
+	czsf_fibers_post(fibers, count);
+}
+
+void czsf_run_fls(struct czsf_task_decl_t* decls, uint64_t count, void* data, uint64_t size_of_data, uint64_t align_of_data)
+{
+	czsf_run_signal_fls(decls, count, NULL, data, size_of_data, align_of_data);
+}
+
+void czsf_run_mono_fls(void (*fn)(void*), void* param, uint64_t param_size, uint64_t count, void* data, uint64_t size_of_data, uint64_t align_of_data)
+{
+	czsf_run_mono_signal_fls(fn, param, param_size, count, NULL, data, size_of_data, align_of_data);
+}
+
+void czsf_run_mono_pp_fls(void (*fn)(void*), void** param, uint64_t count, void* data, uint64_t size_of_data, uint64_t align_of_data)
+{
+	czsf_run_mono_pp_signal_fls(fn, param, count, NULL, data, size_of_data, align_of_data);
+}
+
 #ifdef __cplusplus
 namespace czsf
 {
@@ -759,10 +886,25 @@ czsf_task_decl_t taskDecl(void (*fn)())
 }
 
 void run(struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync) { czsf_run_signal(decls, count, sync); }
-void run(struct czsf_task_decl_t* decls, uint64_t count) { czsf::run(decls, count, NULL); }
+void run(struct czsf_task_decl_t* decls, uint64_t count) { czsf_run_signal(decls, count, NULL); }
 void run(void (*fn)(), struct czsf_sync_t* sync) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, sync); }
 void run(void (*fn)(), czsf::Sync* sync) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, &sync->s); }
 void run(void (*fn)()) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, NULL); }
+
+template <typename T>
+void run(T* data, struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync) { czsf_run_signal_fls(decls, count, sync, data, sizeof(T), alignof(T)); }
+
+template <typename T>
+void run(T* data, struct czsf_task_decl_t* decls, uint64_t count) { czsf_run_signal(decls, count, NULL, data, sizeof(T), alignof(T)); }
+
+template <typename T>
+void run(T* data, void (*fn)(), struct czsf_sync_t* sync) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, sync, data, sizeof(T), alignof(T)); }
+
+template <typename T>
+void run(T* data, void (*fn)(), czsf::Sync* sync) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, &sync->s, data, sizeof(T), alignof(T)); }
+
+template <typename T>
+void run(T* data, void (*fn)()) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, NULL, data, sizeof(T), alignof(T)); }
 
 }
 #endif
