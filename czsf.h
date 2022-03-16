@@ -895,16 +895,16 @@ template <typename T>
 void run(T* data, struct czsf_task_decl_t* decls, uint64_t count, struct czsf_sync_t* sync) { czsf_run_signal_fls(decls, count, sync, data, sizeof(T), alignof(T)); }
 
 template <typename T>
-void run(T* data, struct czsf_task_decl_t* decls, uint64_t count) { czsf_run_signal(decls, count, NULL, data, sizeof(T), alignof(T)); }
+void run(T* data, struct czsf_task_decl_t* decls, uint64_t count) { czsf_run_signal_fls(decls, count, NULL, data, sizeof(T), alignof(T)); }
 
 template <typename T>
-void run(T* data, void (*fn)(), struct czsf_sync_t* sync) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, sync, data, sizeof(T), alignof(T)); }
+void run(T* data, void (*fn)(), struct czsf_sync_t* sync) { czsf_run_mono_signal_fls((void (*)(void*))(fn), NULL, 0, 1, sync, data, sizeof(T), alignof(T)); }
 
 template <typename T>
-void run(T* data, void (*fn)(), czsf::Sync* sync) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, &sync->s, data, sizeof(T), alignof(T)); }
+void run(T* data, void (*fn)(), czsf::Sync* sync) { czsf_run_mono_signal_fls((void (*)(void*))(fn), NULL, 0, 1, &sync->s, data, sizeof(T), alignof(T)); }
 
 template <typename T>
-void run(T* data, void (*fn)()) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, NULL, data, sizeof(T), alignof(T)); }
+void run(T* data, void (*fn)()) { czsf_run_mono_signal_fls((void (*)(void*))(fn), NULL, 0, 1, NULL, data, sizeof(T), alignof(T)); }
 
 template <typename T>
 T* get_fls()
