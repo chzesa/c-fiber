@@ -457,7 +457,7 @@ struct czsf_fiber_t* czsf_acquire_next_fiber()
 		stack_space = (char*)(malloc(CZSF_STACK_SIZE));
 	}
 
-	fiber->stack = (uint64_t)(&stack_space[CZSF_STACK_SIZE]);
+	fiber->base = (uint64_t)(&stack_space[CZSF_STACK_SIZE]);
 	fiber->stack_space = stack_space;
 
 	if (fiber->fls_ptr != NULL)
@@ -471,6 +471,7 @@ struct czsf_fiber_t* czsf_acquire_next_fiber()
 	fiber->base = fiber->base - 8;
 	// Align stack
 	fiber->base -= fiber->base % 16;
+	fiber->stack = fiber->base;
 
 	return fiber;
 }
