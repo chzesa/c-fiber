@@ -906,6 +906,12 @@ void run(T* data, void (*fn)(), czsf::Sync* sync) { czsf_run_mono_signal((void (
 template <typename T>
 void run(T* data, void (*fn)()) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, NULL, data, sizeof(T), alignof(T)); }
 
+template <typename T>
+T* get_fls()
+{
+	return reinterpret_cast<T*>(czsf_get_fls());
+}
+
 }
 #endif
 
