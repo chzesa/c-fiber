@@ -67,6 +67,27 @@ void waitForAllComputations()
 	EXITING = true;
 }
 
+void print_fls()
+{
+	char* fls = czsf::get_fls<char>();			// A fiber with FLS must know what the type of the
+	cout << fls << endl;					// data stored in FLS is.
+}
+
+void demo_fls()
+{
+	czsf::Barrier barrier(2);				// Create a barrier so the char arrays remain valid
+								// until the fibers have finished exeucting. They
+	char fls_1[10] = "Hello FLS - Fiber Local Storage";	// need only remain active until the tasks have
+	char fls_2[39]						// been started, and one way of tracking this would
+		= "FLS allows data to be stored per-fiber";	// be to include a pointer to the barrier in FLS,
+								// to be signaled immediately in the task function.
+
+	czsf::run<char[10]>(&fls_1, print_fls, &barrier);	// Pointer to a task's FLS is passed as the first
+	czsf::run<char[39]>(&fls_2, print_fls, &barrier);	// parameter. If multiple tasks are queued with
+								// the same function call, they all receive an
+	barrier.wait();						// independent copy of the data.
+}
+
 int main()
 {
 	thread t1 ([] { while(!EXITING) { czsf_yield(); } });   // Spawn worker threads for concurrency
@@ -77,6 +98,7 @@ int main()
 	                                                        // fiber, so at least one function must be run this way.
 	                                                        // Whether worker threads are initialized in main or
 	                                                        // from a fiber comes down to user preference.
+	czsf::run(demo_fls);
 
 	t1.join();                                              // Wait for work to finish. Some libraries require
 	t2.join();                                              // functions be called from the main thread only. In
