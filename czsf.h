@@ -221,6 +221,43 @@ czsf_task_decl_t taskDecl(void (*fn)(T*), T* param)
 
 czsf_task_decl_t taskDecl(void (*fn)());
 
+
+template<class F, class T>
+void run(F* fls, void (*fn)(T*), T* param, uint64_t count, struct czsf_sync_t* sync)
+{
+	czsf_run_mono_signal_fls((void (*)(void*))(fn), param, sizeof(T), count, sync, fls, sizeof (F), alignof (F));
+}
+
+template<class F, class T>
+void run(F* fls, void (*fn)(T*), T** param, uint64_t count, struct czsf_sync_t* sync)
+{
+	czsf_run_mono_pp_signal_fls(fls, (void (*)(void*))(fn), (void**)param, count, sync, fls, sizeof (F), alignof (F));
+}
+
+template<class F, class T>
+void run(F* fls, void (*fn)(T*), T* param, uint64_t count, czsf::Sync* sync)
+{
+	czsf_run_mono_signal_fls((void (*)(void*))(fn), param, sizeof(T), count, &sync->s, fls, sizeof (F), alignof (F));
+}
+
+template<class F, class T>
+void run(F* fls, void (*fn)(T*), T** param, uint64_t count, czsf::Sync* sync)
+{
+	czsf_run_mono_pp_signal_fls((void (*)(void*))(fn), (void**)param, count, &sync->s, fls, sizeof (F), alignof (F));
+}
+
+template<class F, class T>
+void run(F* fls, void (*fn)(T*), T* param, uint64_t count)
+{
+	czsf_run_mono_signal_fls((void (*)(void*))(fn), param, sizeof(T), count, nullptr, fls, sizeof (F), alignof (F));
+}
+
+template<class F, class T>
+void run(F* fls, void (*fn)(T*), T** param, uint64_t count)
+{
+	czsf_run_mono_pp_signal_fls(fls, (void (*)(void*))(fn), (void**)param, count, nullptr, fls, sizeof (F), alignof (F));
+}
+
 template<class T>
 void run(void (*fn)(T*), T* param, uint64_t count, struct czsf_sync_t* sync)
 {
