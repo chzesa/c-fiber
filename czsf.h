@@ -183,6 +183,8 @@ void* czsf_get_fls();
 #ifdef __cplusplus
 }
 
+#include <cstddef>
+
 namespace czsf
 {
 
