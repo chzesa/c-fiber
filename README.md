@@ -8,7 +8,7 @@ Two synchronization primitives are provided
 
 `czsf_wait()` on a sync primitive **must** be called from a fiber.
 
-To use the header-only version include the following snippet in a source file:
+Iinclude the following snippet in **one** source file:
 ```c++
 #define CZSF_IMPLEMENTATION
 #include "czsf.h"
@@ -22,10 +22,4 @@ Linux:
 
 ```sh
 g++ example.cpp -pthread
-```
-
-Windows:
-
-```sh
-g++ example.cpp
 ```
