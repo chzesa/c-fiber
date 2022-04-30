@@ -69,7 +69,7 @@ void waitForAllComputations()
 void print_fls()
 {
 	char* fls = czsf::get_fls<char>();			// A fiber with FLS must know what the type of the
-	cout << fls;					// data stored in FLS is.
+	cout << fls;						// data stored in FLS is.
 }
 
 void demo_fls()
