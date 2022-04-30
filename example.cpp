@@ -29,11 +29,10 @@ void waitForComputation(uint64_t* input)
 
 	uint64_t result;
 
-	ComputeTask task = {
-		semaphore: &sem,
-		input: input,
-		output: &result
-	};
+	ComputeTask task;
+	task.semaphore = &sem;
+	task.input = input;
+	task.output = &result;
 
 	addTaskToComputeQueue(task);
 	sem.wait();                                             // Wait on semaphore, execution continues once it's
@@ -48,7 +47,7 @@ void expensiveComputation()
 	ComputeTask task;
 	if (!getTaskFromComputeQueue(&task)) return;
 
-	this_thread::sleep_for(1s);                             // Pretend the computation takes a while
+	this_thread::sleep_for(std::chrono::seconds(1));        // Pretend the computation takes a while
 	*task.output = *task.input + 1;                         // Write result
 	task.semaphore->signal();
 }
@@ -70,20 +69,20 @@ void waitForAllComputations()
 void print_fls()
 {
 	char* fls = czsf::get_fls<char>();			// A fiber with FLS must know what the type of the
-	cout << fls << endl;					// data stored in FLS is.
+	cout << fls;					// data stored in FLS is.
 }
 
 void demo_fls()
 {
 	czsf::Barrier barrier(2);				// Create a barrier so the char arrays remain valid
 								// until the fibers have finished exeucting. They
-	char fls_1[10] = "Hello FLS - Fiber Local Storage";	// need only remain active until the tasks have
-	char fls_2[39]						// been started, and one way of tracking this would
-		= "FLS allows data to be stored per-fiber";	// be to include a pointer to the barrier in FLS,
-								// to be signaled immediately in the task function.
+	char fls_1[33] = "Hello FLS - Fiber Local Storage\n";	// need remain valid only until the tasks have
+	char fls_2[40]						// been started, and one way of tracking this is
+		= "FLS allows data to be stored per-fiber\n";	// to include a pointer to the barrier in FLS, to
+								// be signaled immediately in the task function.
 
-	czsf::run<char[10]>(&fls_1, print_fls, &barrier);	// Pointer to a task's FLS is passed as the first
-	czsf::run<char[39]>(&fls_2, print_fls, &barrier);	// parameter. If multiple tasks are queued with
+	czsf::run<char[33]>(&fls_1, print_fls, &barrier);	// Pointer to a task's FLS is passed as the first
+	czsf::run<char[40]>(&fls_2, print_fls, &barrier);	// parameter. If multiple tasks are queued with
 								// the same function call, they all receive an
 	barrier.wait();						// independent copy of the data.
 }
