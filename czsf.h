@@ -764,7 +764,7 @@ struct czsf_fiber_t* czsf_allocate_tasks(uint64_t count, struct czsf_sync_t* syn
 	uint64_t* execution_counter = (uint64_t*)((uint64_t)fibers + count * sizeof(struct czsf_fiber_t));
 	*execution_counter = count;
 
-	for (int i = 0; i < count; i++)
+	for (uint64_t i = 0; i < count; i++)
 	{
 		fibers[i].status = CZSF_FIBER_STATUS_NORMAL;
 		fibers[i].sync = sync;
@@ -787,7 +787,7 @@ struct czsf_fiber_t* czsf_allocate_tasks_fls(uint64_t count, struct czsf_sync_t*
 	uint64_t* execution_counter = (uint64_t*)((uint64_t)fibers + count * sizeof(struct czsf_fiber_t));
 	*execution_counter = count;
 
-	for (int i = 0; i < count; i++)
+	for (uint64_t i = 0; i < count; i++)
 	{
 		fibers[i].status = CZSF_FIBER_STATUS_NORMAL;
 		fibers[i].sync = sync;
@@ -820,7 +820,7 @@ void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, struct czsf
 		return;
 
 	struct czsf_fiber_t* fibers = czsf_allocate_tasks(count, sync);
-	for (int i = 0; i < count; i++)
+	for (uint64_t i = 0; i < count; i++)
 		fibers[i].task = decls[i];
 
 	czsf_fibers_post(fibers, count);
@@ -832,7 +832,7 @@ void czsf_run_mono_signal(void (*fn)(void*), void* param, uint64_t param_size, u
 		return;
 
 	struct czsf_fiber_t* fibers = czsf_allocate_tasks(count, sync);
-	for (int i = 0; i < count; i++)
+	for (uint64_t i = 0; i < count; i++)
 		fibers[i].task = czsf_task_decl(fn, (char*)(param) + i * param_size);
 
 	czsf_fibers_post(fibers, count);
@@ -845,7 +845,7 @@ void czsf_run_mono_pp_signal(void (*fn)(void*), void** param, uint64_t count, st
 
 	struct czsf_fiber_t* fibers = czsf_allocate_tasks(count, sync);
 
-	for (int i = 0; i < count; i++)
+	for (uint64_t i = 0; i < count; i++)
 		fibers[i].task = czsf_task_decl(fn, param[i]);
 
 	czsf_fibers_post(fibers, count);
@@ -872,7 +872,7 @@ void czsf_run_signal_fls(struct czsf_task_decl_t* decls, uint64_t count, struct 
 		return;
 
 	struct czsf_fiber_t* fibers = czsf_allocate_tasks_fls(count, sync, data, size_of_data, align_of_data);
-	for (int i = 0; i < count; i++)
+	for (uint64_t i = 0; i < count; i++)
 		fibers[i].task = decls[i];
 
 	czsf_fibers_post(fibers, count);
@@ -884,7 +884,7 @@ void czsf_run_mono_signal_fls(void (*fn)(void*), void* param, uint64_t param_siz
 		return;
 
 	struct czsf_fiber_t* fibers = czsf_allocate_tasks_fls(count, sync, data, size_of_data, align_of_data);
-	for (int i = 0; i < count; i++)
+	for (uint64_t i = 0; i < count; i++)
 		fibers[i].task = czsf_task_decl(fn, (char*)(param) + i * param_size);
 
 	czsf_fibers_post(fibers, count);
@@ -897,7 +897,7 @@ void czsf_run_mono_pp_signal_fls(void (*fn)(void*), void** param, uint64_t count
 
 	struct czsf_fiber_t* fibers = czsf_allocate_tasks_fls(count, sync, data, size_of_data, align_of_data);
 
-	for (int i = 0; i < count; i++)
+	for (uint64_t i = 0; i < count; i++)
 		fibers[i].task = czsf_task_decl(fn, param[i]);
 
 	czsf_fibers_post(fibers, count);
