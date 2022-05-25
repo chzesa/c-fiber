@@ -542,64 +542,55 @@ void czsf_exec_fiber()
 	}
 	czsf_yield_return();
 }
+extern "C" void CZSF_STORE_AND_CALL(uint64_t* to, void(*fn)());
 
-#define PUSHA			\
-	"pushq %%rax \n\t"	\
-	"pushq %%rdi \n\t"	\
-	"pushq %%rsi \n\t"	\
-	"pushq %%rdx \n\t"	\
-	"pushq %%rcx \n\t"	\
-	"pushq %%r8 \n\t"	\
-	"pushq %%r9 \n\t"	\
-	"pushq %%r10 \n\t"	\
-	"pushq %%r11 \n\t"	\
-	"pushq %%rbx \n\t"	\
-	"pushq %%r12 \n\t"	\
-	"pushq %%r13 \n\t"	\
-	"pushq %%r14 \n\t"	\
-	"pushq %%r15 \n\t"	\
-	"pushq %%rbp \n\t"
-
-#define POPA			\
-	"popq %%rbp \n\t"	\
-	"popq %%r15 \n\t"	\
-	"popq %%r14 \n\t"	\
-	"popq %%r13 \n\t"	\
-	"popq %%r12 \n\t"	\
-	"popq %%rbx \n\t"	\
-	"popq %%r11 \n\t"	\
-	"popq %%r10 \n\t"	\
-	"popq %%r9 \n\t"	\
-	"popq %%r8 \n\t"	\
-	"popq %%rcx \n\t"	\
-	"popq %%rdx \n\t"	\
-	"popq %%rsi \n\t"	\
-	"popq %%rdi \n\t"	\
-	"popq %%rax \n\t"
-
-#define CZSF_STORE_AND_CALL(store, fun_label)	\
-	uint64_t stack;				\
-	asm volatile				\
-	(					\
-		"movq %%rax, %0\n\t"		\
-		"movq %%rsp, %%rax\n\t"		\
-		"andq $15, %%rax\n\t"		\
-		"subq %%rax, %%rsp\n\t"		\
-		"subq $8, %%rsp\n\t"		\
-		"movq %0, %%rax\n\t"		\
-		PUSHA				\
-		"movq %%rsp, %0"		\
-		:"+m" (stack)			\
-	);					\
-	*store = stack - 8;			\
-	asm volatile				\
-	(					\
-		"call " fun_label "\n\t"	\
-		POPA				\
-		:				\
-	);
+// rdi first param
+// rsi second param
+asm
+(
+"CZSF_STORE_AND_CALL:		\n\t"
+	"pushq	%rbp		\n\t"
+	"movq	%rsp,	%rbp	\n\t"
+	"subq	$8,	%rsp	\n\t"
+	"pushq %rax \n\t"
+	"pushq %rdi \n\t"
+	"pushq %rsi \n\t"
+	"pushq %rdx \n\t"
+	"pushq %rcx \n\t"
+	"pushq %r8 \n\t"
+	"pushq %r9 \n\t"
+	"pushq %r10 \n\t"
+	"pushq %r11 \n\t"
+	"pushq %rbx \n\t"
+	"pushq %r12 \n\t"
+	"pushq %r13 \n\t"
+	"pushq %r14 \n\t"
+	"pushq %r15 \n\t"
+	"pushq %rbp \n\t"
+	"movq	%rsp,	(%rdi)	\n\t"
+	"call	*%rsi		\n\t"
+	"popq %rbp \n\t"
+	"popq %r15 \n\t"
+	"popq %r14 \n\t"
+	"popq %r13 \n\t"
+	"popq %r12 \n\t"
+	"popq %rbx \n\t"
+	"popq %r11 \n\t"
+	"popq %r10 \n\t"
+	"popq %r9 \n\t"
+	"popq %r8 \n\t"
+	"popq %rcx \n\t"
+	"popq %rdx \n\t"
+	"popq %rsi \n\t"
+	"popq %rdi \n\t"
+	"popq %rax \n\t"
+	"movq	%rbp,	%rsp	\n\t"
+	"popq	%rbp		\n\t"
+	"ret\n\t"
+);
 
 #define CZSF_RETURN_TO_STACK			\
+	stack -= 8;				\
 	asm volatile				\
 	(					\
 		"movq %0, %%rsp\n\t"		\
@@ -608,7 +599,7 @@ void czsf_exec_fiber()
 		:"r" (stack)			\
 	);
 
-void czsf_yield_2() asm("czsf_yield_2");
+// void czsf_yield_2() asm("czsf_yield_2");
 void czsf_yield_2()
 {
 	struct czsf_fiber_t* fiber = czsf_acquire_next_fiber();
@@ -644,10 +635,10 @@ void czsf_yield_2()
 
 void czsf_yield()
 {
-	CZSF_STORE_AND_CALL(&CZSF_STACK, "czsf_yield_2")
+	CZSF_STORE_AND_CALL(&CZSF_STACK, czsf_yield_2);
 }
 
-void czsf_yield_block() asm ("czsf_yield_block");
+// void czsf_yield_block() asm ("czsf_yield_block");
 void czsf_yield_block()
 {
 	czsf_spinlock_release(CZSF_HELD_LOCK);
@@ -759,7 +750,7 @@ void czsf_wait(struct czsf_sync_t* self)
 	fiber->status = CZSF_FIBER_STATUS_BLOCKED;
 	czsf_list_push_back(&self->queue, fiber, fiber);
 	CZSF_HELD_LOCK = &self->lock;
-	CZSF_STORE_AND_CALL(&CZSF_EXEC_FIBER->stack, "czsf_yield_block")
+	CZSF_STORE_AND_CALL(&CZSF_EXEC_FIBER->stack, czsf_yield_block);
 }
 
 struct czsf_fiber_t* czsf_allocate_tasks(uint64_t count, struct czsf_sync_t* sync)
