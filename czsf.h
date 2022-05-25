@@ -581,18 +581,22 @@ void czsf_exec_fiber()
 	uint64_t stack;				\
 	asm volatile				\
 	(					\
+		"movq %%rax, %0\n\t"		\
+		"movq %%rsp, %%rax\n\t"		\
+		"andq $15, %%rax\n\t"		\
+		"subq %%rax, %%rsp\n\t"		\
+		"subq $8, %%rsp\n\t"		\
+		"movq %0, %%rax\n\t"		\
 		PUSHA				\
 		"movq %%rsp, %0"		\
-		:"=r" (stack)			\
+		:"+m" (stack)			\
 	);					\
 	*store = stack - 8;			\
 	asm volatile				\
 	(					\
-		"movq %0, %%rsp \n\t"		\
 		"call " fun_label "\n\t"	\
 		POPA				\
 		:				\
-		: "r" (stack)			\
 	);
 
 #define CZSF_RETURN_TO_STACK			\
