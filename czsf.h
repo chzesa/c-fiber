@@ -7,7 +7,11 @@
 #ifndef CZSF_HEADERS_H
 #define CZSF_HEADERS_H
 
-#ifdef __cplusplus
+#ifdef _WIN64
+#include <mutex>
+#include <condition_variable>
+
+#elif __cplusplus
 	extern "C" {
 #endif
 
@@ -101,8 +105,14 @@ struct czsf_sync_t
 {
 	enum czsf_sync_kind kind;
 	volatile int64_t value;
+
+#if defined(_WIN64)
+	std::mutex mutex;
+	std::condition_variable cv;
+#else
 	struct czsf_spinlock_t lock;
 	struct czsf_list_t queue;
+#endif
 };
 
 struct czsf_sync_t czsf_semaphore(int64_t value);
@@ -328,6 +338,123 @@ void run(void (*fn)());
 
 
 #ifdef CZSF_IMPLEMENTATION
+
+#if defined(_WIN64)
+
+#ifndef CZSF_IMPLEMENTATION_GUARD_
+#define CZSF_IMPLEMENTATION_GUARD_
+
+#include <thread>
+
+void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, czsf::Sync* sync)
+{
+	if (count == 0) return;
+
+	for (size_t i = 0; i < count; i++)
+	{
+		std::thread([=] {
+			decls[i].fn(decls[i].param);
+
+			if (sync != nullptr)
+				sync->signal();
+
+		}).detach();
+	}
+}
+
+void czsf_run_mono_signal(void (*fn)(void*), void* param, uint64_t param_size, uint64_t count, czsf::Sync* sync)
+{
+	if (count == 0) return;
+
+	for (size_t i = 0; i < count; i++)
+	{
+		std::thread([=] {
+			fn(static_cast<char*>(param) + i * param_size);
+
+			if (sync != nullptr)
+				sync->signal();
+
+		}).detach();
+	}
+}
+
+void czsf_run(struct czsf_task_decl_t* decls, uint64_t count)
+{
+	czsf_run_signal(decls, count, static_cast<czsf::Sync*>(NULL));
+}
+
+void czsf_run_mono(void (*fn)(void*), void* param, uint64_t param_size, uint64_t count)
+{
+	czsf_run_mono_signal(fn, param, param_size, count, static_cast<czsf::Sync*>(NULL));
+}
+
+namespace czsf {
+
+Barrier::Barrier()
+{
+	this->kind = CZSF_SYNC_BARRIER;
+	this->value = 0;
+}
+
+Barrier::Barrier(int64_t v)
+{
+	this->kind = CZSF_SYNC_BARRIER;
+	this->value = v;
+}
+
+void Barrier::wait()
+{
+	std::unique_lock<std::mutex> lock(this->mutex);
+	if (this->value > 0)
+	{
+		cv.wait(lock, [this] { return value == 0; });
+	}
+}
+
+void Barrier::signal()
+{
+	std::lock_guard<std::mutex> lock(this->mutex);
+	if (this->value > 0 && --this->value == 0)
+	{
+		this->cv.notify_all();
+	}
+}
+
+Semaphore::Semaphore() {
+	this->kind = CZSF_SYNC_SEMAPHORE;
+	this->value = 0;
+}
+
+Semaphore::Semaphore(int64_t v) {
+	this->kind = CZSF_SYNC_SEMAPHORE;
+	this->value = v;
+}
+
+void Semaphore::wait() {
+	std::unique_lock<std::mutex> lock(mutex);
+	if (this->value == 0)
+	{
+		cv.wait(lock, [this] { return this->value > 0; });
+	}
+
+	this->value--;
+}
+
+void Semaphore::signal() {
+	std::lock_guard<std::mutex> lock(mutex);
+	this->value++;
+	cv.notify_one();
+}
+
+void run(void (*fn)(), czsf::Sync* sync) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, sync); }
+void run(void (*fn)()) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, static_cast<czsf::Sync*>(NULL)); }
+
+} // namespace czsf {
+
+#endif // CZSF_IMPLEMENTATION_GUARD_
+
+
+#elif defined(__linux__)
 
 #ifndef CZSF_IMPLEMENTATION_GUARD_
 #define CZSF_IMPLEMENTATION_GUARD_
@@ -981,4 +1108,7 @@ T* get_fls()
 #endif
 
 #endif // CZSF_IMPLEMENTATION_GUARD_
+
+#endif
+
 #endif // CZSF_IMPLEMENTATION
