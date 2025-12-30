@@ -346,6 +346,23 @@ void run(void (*fn)());
 
 #include <thread>
 
+void czsf_signal(struct czsf_sync_t* self)
+{
+	if (self->kind == CZSF_SYNC_SEMAPHORE)
+	{
+		std::lock_guard<std::mutex> lock(self->mutex);
+		self->value++;
+		self->cv.notify_one();
+	}
+
+	if (self->kind == CZSF_SYNC_BARRIER)
+	{
+		std::lock_guard<std::mutex> lock(self->mutex);
+		if (self->value > 0 && --self->value == 0)
+			self->cv.notify_all();
+	}
+}
+
 void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, czsf::Sync* sync)
 {
 	if (count == 0) return;
@@ -357,6 +374,22 @@ void czsf_run_signal(struct czsf_task_decl_t* decls, uint64_t count, czsf::Sync*
 
 			if (sync != nullptr)
 				sync->signal();
+
+		}).detach();
+	}
+}
+
+void czsf_run_mono_signal(void (*fn)(void*), void* param, uint64_t param_size, uint64_t count, struct czsf_sync_t* sync)
+{
+	if (count == 0) return;
+
+	for (size_t i = 0; i < count; i++)
+	{
+		std::thread([=] {
+			fn(static_cast<char*>(param) + i * param_size);
+
+			if (sync != nullptr)
+				czsf_signal(sync);
 
 		}).detach();
 	}
