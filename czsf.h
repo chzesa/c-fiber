@@ -407,7 +407,7 @@ void Barrier::wait()
 	std::unique_lock<std::mutex> lock(this->mutex);
 	if (this->value > 0)
 	{
-		cv.wait(lock, [this] { return value == 0; });
+		this->cv.wait(lock, [this] { return this->value == 0; });
 	}
 }
 
@@ -431,19 +431,19 @@ Semaphore::Semaphore(int64_t v) {
 }
 
 void Semaphore::wait() {
-	std::unique_lock<std::mutex> lock(mutex);
+	std::unique_lock<std::mutex> lock(this->mutex);
 	if (this->value == 0)
 	{
-		cv.wait(lock, [this] { return this->value > 0; });
+		this->cv.wait(lock, [this] { return this->value > 0; });
 	}
 
 	this->value--;
 }
 
 void Semaphore::signal() {
-	std::lock_guard<std::mutex> lock(mutex);
+	std::lock_guard<std::mutex> lock(this->mutex);
 	this->value++;
-	cv.notify_one();
+	this->cv.notify_one();
 }
 
 void run(void (*fn)(), czsf::Sync* sync) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, sync); }
