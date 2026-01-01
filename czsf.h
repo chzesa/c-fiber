@@ -7,7 +7,7 @@
 #ifndef CZSF_HEADERS_H
 #define CZSF_HEADERS_H
 
-#ifdef _WIN64
+#ifdef CZSF_IMPL_THREADS
 #include <mutex>
 #include <condition_variable>
 
@@ -106,7 +106,7 @@ struct czsf_sync_t
 	enum czsf_sync_kind kind;
 	volatile int64_t value;
 
-#if defined(_WIN64)
+#ifdef CZSF_IMPL_THREADS
 	std::mutex mutex;
 	std::condition_variable cv;
 #else
@@ -190,7 +190,7 @@ void czsf_run_mono_pp_signal_fls(void (*fn)(void*), void** param, uint64_t count
 
 void* czsf_get_fls();
 
-#ifdef _WIN64 // No extern c
+#ifdef CZSF_IMPL_THREADS // No extern c
 
 #elif __cplusplus // Close extern C
 }
@@ -339,7 +339,7 @@ void run(void (*fn)());
 
 #ifdef CZSF_IMPLEMENTATION
 
-#if defined(_WIN64)
+#ifdef CZSF_IMPL_THREADS
 
 #ifndef CZSF_IMPLEMENTATION_GUARD_
 #define CZSF_IMPLEMENTATION_GUARD_
@@ -487,7 +487,7 @@ void run(void (*fn)()) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1,
 #endif // CZSF_IMPLEMENTATION_GUARD_
 
 
-#elif defined(__linux__)
+#else
 
 #ifndef CZSF_IMPLEMENTATION_GUARD_
 #define CZSF_IMPLEMENTATION_GUARD_
