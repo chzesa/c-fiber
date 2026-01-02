@@ -7,10 +7,6 @@
 #ifndef CZSF_HEADERS_H
 #define CZSF_HEADERS_H
 
-#ifdef _WIN64
-#define CZSF_IMPL_THREADS
-#endif
-
 #ifdef CZSF_IMPL_THREADS
 #include <mutex>
 #include <condition_variable>
