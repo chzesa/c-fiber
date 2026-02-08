@@ -10,8 +10,10 @@
 #ifdef CZSF_IMPL_THREADS
 #include <mutex>
 #include <condition_variable>
+#include <functional>
 
 #elif __cplusplus
+#include <functional>
 	extern "C" {
 #endif
 
@@ -236,6 +238,10 @@ czsf_task_decl_t taskDecl(void (*fn)(T*), T* param)
 
 czsf_task_decl_t taskDecl(void (*fn)());
 
+void czsf_lambda(void* p);
+
+void run(std::function<void()>& lambda, czsf::Sync* sync);
+void run(std::function<void()>* lambda, uint64_t count, czsf::Sync* sync);
 
 template<class F, class T>
 void run(F* fls, void (*fn)(T*), T* param, uint64_t count, struct czsf_sync_t* sync)
@@ -1130,6 +1136,15 @@ void run(struct czsf_task_decl_t* decls, uint64_t count) { czsf_run_signal(decls
 void run(void (*fn)(), struct czsf_sync_t* sync) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, sync); }
 void run(void (*fn)(), czsf::Sync* sync) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, sync); }
 void run(void (*fn)()) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, NULL); }
+
+void czsf_lambda(void* p)
+{
+	auto* fn = static_cast<std::function<void()>*>(p);
+	(*fn)();
+}
+
+void run(std::function<void()>& lambda, czsf::Sync* sync) { czsf_run_mono_signal(czsf_lambda, &lambda, sizeof(std::function<void()>), 1, sync); }
+void run(std::function<void()>* lambda, uint64_t count, czsf::Sync* sync) { czsf_run_mono_signal(czsf_lambda, lambda, sizeof(std::function<void()>), count, sync); }
 
 template <typename T>
 T* get_fls()
