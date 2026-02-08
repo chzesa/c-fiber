@@ -485,6 +485,16 @@ void Semaphore::signal() {
 	this->cv.notify_one();
 }
 
+void czsf_lambda(void* p)
+{
+	auto* fn = static_cast<std::function<void()>*>(p);
+	(*fn)();
+}
+
+void run(std::function<void()>& lambda, czsf::Sync* sync) { czsf_run_mono_signal(czsf_lambda, &lambda, sizeof(std::function<void()>), 1, sync); }
+void run(std::function<void()>* lambda, uint64_t count, czsf::Sync* sync) { czsf_run_mono_signal(czsf_lambda, lambda, sizeof(std::function<void()>), count, sync); }
+
+
 void run(void (*fn)(), czsf::Sync* sync) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, sync); }
 void run(void (*fn)()) { czsf_run_mono_signal((void (*)(void*))(fn), NULL, 0, 1, static_cast<czsf::Sync*>(NULL)); }
 
