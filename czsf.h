@@ -427,6 +427,11 @@ void czsf_run_mono(void (*fn)(void*), void* param, uint64_t param_size, uint64_t
 	czsf_run_mono_signal(fn, param, param_size, count, static_cast<czsf::Sync*>(NULL));
 }
 
+void czsf_run_mono_signal_fls(void (*fn)(void*), void* param, uint64_t param_size, uint64_t count, struct czsf_sync_t* sync, void* data, uint64_t size_of_data, uint64_t align_of_data)
+{
+	// Empty on purpose
+}
+
 namespace czsf {
 
 Barrier::Barrier()
