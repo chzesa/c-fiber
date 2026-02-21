@@ -215,6 +215,7 @@ struct Barrier : Sync
 {
 	Barrier();
 	Barrier(int64_t value);
+	void setValue(int64_t value);
 	void wait() override;
 	void signal() override;
 };
@@ -223,6 +224,7 @@ struct Semaphore : Sync
 {
 	Semaphore();
 	Semaphore(int64_t value);
+	void setValue(int64_t value);
 	void wait() override;
 	void signal() override;
 };
@@ -446,6 +448,11 @@ Barrier::Barrier(int64_t v)
 	this->value = v;
 }
 
+void Barrier::setValue(int64_t v)
+{
+	this->value = v;
+}
+
 void Barrier::wait()
 {
 	std::unique_lock<std::mutex> lock(this->mutex);
@@ -471,6 +478,11 @@ Semaphore::Semaphore() {
 
 Semaphore::Semaphore(int64_t v) {
 	this->kind = CZSF_SYNC_SEMAPHORE;
+	this->value = v;
+}
+
+void Semaphore::setValue(int64_t v)
+{
 	this->value = v;
 }
 
@@ -1117,6 +1129,11 @@ Barrier::Barrier(int64_t value)
 	this->queue = CZSF_LIST_INIT;
 }
 
+void Barrier::setValue(int64_t value)
+{
+	this->value = value;
+}
+
 void Barrier::wait(){ czsf_wait(this); }
 void Barrier::signal() { czsf_signal(this); }
 
@@ -1133,6 +1150,11 @@ Semaphore::Semaphore(int64_t value)
 	this->kind = CZSF_SYNC_SEMAPHORE;
 	this->lock = CZSF_SPINLOCK_INIT;
 	this->queue = CZSF_LIST_INIT;
+}
+
+void Semaphore::setValue(int64_t value)
+{
+	this->value = value;
 }
 
 void Semaphore::wait() { czsf_wait(this); }
